@@ -48,6 +48,33 @@ Este repo permite que un equipo tome SQL heredado, documentos funcionales, DDL, 
 10. Usa las skills `oci-medallion-advisor`, `oci-medallion-migration-intake`, `oci-medallion-bootstrap` y `oci-medallion-scaffold`.
 11. Si Terraform o un recurso OCI no estan claros durante el despliegue, usa `oci-terraform-fallback` como referencia oficial antes de cambiar `infra/` o un MCP.
 
+## Prompt recomendado para clientes
+
+Si quieres usar este repo como asesor guiado, pidele a Codex algo como esto:
+
+```text
+Quiero implementar este proyecto:
+https://github.com/jganggini/oci-medallion-codex-factory
+
+Actua como asesor guiado de migracion y despliegue para una arquitectura medallion en OCI.
+
+Trabaja asi:
+1. inspecciona el repo y detecta la etapa actual
+2. hazme preguntas una por una
+3. si falta un archivo, dime exactamente en que ruta debe ir y que contenido minimo esperas
+4. pregunta tambien si ya existe el bucket con los archivos o si la carga se hara por fuera de este flujo
+5. no asumas credenciales, wallets, OCIDs ni tfvars
+6. antes de ejecutar cambios, resume el plan por etapas
+7. guiame hasta dejar el proyecto listo para desplegar y migrar
+```
+
+Con ese prompt, Codex deberia ayudarte a:
+
+- identificar en que etapa del despliegue o migracion estas
+- decirte donde colocar los archivos del proyecto
+- preguntar si los buckets ya existen o si la carga de archivos se realiza aparte
+- decidir si corresponde intake, scaffold, publish, QA o validacion
+
 ## Contratos clave
 
 - Manifiesto del proyecto: `project.medallion.yaml`

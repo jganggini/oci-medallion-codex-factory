@@ -63,12 +63,14 @@ Codex should first:
 2. identify the current stage: intake, bootstrap, network, scaffold, publish, QA, validate, or incident
 3. ask one material question at a time
 4. tell the user the exact path, file name, and minimum expected content when an input is missing
-5. explain the next concrete step before moving to the next stage
+5. ask whether the source or target bucket with the files already exists, or whether the file load will happen outside this factory flow
+6. explain the next concrete step before moving to the next stage
 
 Codex should explicitly avoid:
 
 - assuming `.local/oci/` is ready
 - assuming wallets, OCIDs, tfvars, SQL bundles, or samples already exist
+- assuming Object Storage buckets must always be created by this repo
 - switching to `oci-mode apply` without confirming credentials and target environment
 - asking long questionnaires in a single turn unless the user explicitly asks for a checklist
 
