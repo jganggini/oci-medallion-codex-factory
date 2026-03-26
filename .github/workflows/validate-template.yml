@@ -18,7 +18,12 @@ jobs:
       - name: Verify forbidden files are absent
         shell: bash
         run: |
-          ! find . -type f \( -name "key.pem" -o -name "cwallet.sso" -o -name "ewallet.p12" -o -name "Wallet_*.zip" -o -name ".env" \)
+          matches=$(find . -type f \( -name "key.pem" -o -name "cwallet.sso" -o -name "ewallet.p12" -o -name "Wallet_*.zip" -o -name ".env" \))
+          if [ -n "$matches" ]; then
+            echo "Forbidden sensitive files found:"
+            printf '%s\n' "$matches"
+            exit 1
+          fi
 
       - name: Verify workspace structure
         shell: bash
@@ -35,7 +40,8 @@ jobs:
         shell: bash
         run: |
           python scripts/init_workspace.py --repo-root . --project-id sample-project
-          test -d .local/migration-private/sample-project/sql
+          test -d workspace/migration-input/sample-project/sql
+          test -d workspace/migration-input/sample-project/data
           test -d workspace/oci-mirror/dev/compartment-data-medallion-dev
 
       - name: Run local MCP demo
