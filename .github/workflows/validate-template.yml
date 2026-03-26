@@ -1,0 +1,51 @@
+name: validate-template
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Verify forbidden files are absent
+        shell: bash
+        run: |
+          ! find . -type f \( -name "key.pem" -o -name "cwallet.sso" -o -name "ewallet.p12" -o -name "Wallet_*.zip" -o -name ".env" \)
+
+      - name: Verify workspace structure
+        shell: bash
+        run: |
+          python scripts/validate_factory.py --repo-root .
+
+      - name: Verify security ignores
+        shell: bash
+        run: |
+          grep -q "^.local/" .gitignore
+          grep -q "^workspace/migration-input/\\*\\*/_inventory/" .gitignore
+
+      - name: Initialize sample workspace
+        shell: bash
+        run: |
+          python scripts/init_workspace.py --repo-root . --project-id sample-project
+          test -d .local/migration-private/sample-project/sql
+          test -d workspace/oci-mirror/dev/compartment-data-medallion-dev
+
+      - name: Run local MCP demo
+        shell: bash
+        run: |
+          python scripts/run_local_publish_demo.py --repo-root . --environment dev
+          test -f workspace/oci-mirror/dev/compartment-data-medallion-dev/data_flow/demo-app/archive.zip
+
+      - name: Run OCI plan demo
+        shell: bash
+        run: |
+          python scripts/run_oci_plan_demo.py --repo-root . --environment dev
+          test -d workspace/oci-mirror/dev/compartment-data-medallion-dev/data_flow/oci-plans

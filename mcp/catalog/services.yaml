@@ -1,0 +1,100 @@
+servers:
+  - name: oci-iam-mcp
+    runtime: python
+    purpose: Compartments, groups, dynamic groups y policies
+    mirror_outputs:
+      - workspace/oci-mirror/<env>/<compartment>/iam/
+    expected_tools:
+      - create_compartment
+      - create_group
+      - create_policy
+      - export_iam_manifest
+
+  - name: oci-network-mcp
+    runtime: python
+    purpose: VCN, subredes, NSGs, gateways, tablas de ruta y private endpoints
+    mirror_outputs:
+      - workspace/oci-mirror/<env>/<compartment>/network/
+    expected_tools:
+      - create_vcn
+      - create_subnet
+      - create_nsg
+      - create_route_table
+      - export_network_manifest
+
+  - name: oci-object-storage-mcp
+    runtime: python
+    purpose: Buckets raw, trusted y refined
+    mirror_outputs:
+      - workspace/oci-mirror/<env>/<compartment>/buckets/
+    expected_tools:
+      - create_bucket
+      - upload_object
+      - sync_bucket_manifest
+
+  - name: oci-resource-manager-mcp
+    runtime: python
+    purpose: Provisioning de stacks OCI con Terraform compatible
+    mirror_outputs:
+      - workspace/oci-mirror/<env>/<compartment>/reports/
+    expected_tools:
+      - create_stack
+      - plan_stack
+      - apply_stack
+      - export_stack_report
+
+  - name: oci-data-flow-mcp
+    runtime: python
+    purpose: Apps, runs, artefactos y evidencias de Data Flow
+    mirror_outputs:
+      - workspace/oci-mirror/<env>/<compartment>/data_flow/
+    expected_tools:
+      - create_application
+      - publish_archive
+      - run_application
+      - collect_run_report
+
+  - name: oci-data-integration-mcp
+    runtime: python
+    purpose: Workspaces, folders, tasks, pipelines y task runs DI
+    mirror_outputs:
+      - workspace/oci-mirror/<env>/<compartment>/data_integration/
+    expected_tools:
+      - create_workspace_metadata
+      - create_folder
+      - create_task_from_dataflow
+      - create_pipeline
+      - collect_task_run_report
+
+  - name: oci-autonomous-database-mcp
+    runtime: python
+    purpose: ADB, bootstrap, wallet metadata y carga de objetos Gold
+    mirror_outputs:
+      - workspace/oci-mirror/<env>/<compartment>/autonomous_database/
+    expected_tools:
+      - create_autonomous_database
+      - download_wallet_metadata
+      - bootstrap_schema
+      - load_gold_objects
+
+  - name: oci-vault-mcp
+    runtime: python
+    purpose: Vault, keys, secrets y referencias redacted
+    mirror_outputs:
+      - workspace/oci-mirror/<env>/<compartment>/vault/
+    expected_tools:
+      - create_vault
+      - create_secret
+      - rotate_secret_reference
+      - export_vault_manifest
+
+  - name: migration-intake-mcp
+    runtime: python
+    purpose: Indexar insumos de migracion y validar readiness
+    mirror_outputs:
+      - workspace/migration-input/<project_id>/_inventory/
+    expected_tools:
+      - validate_input_structure
+      - inventory_sources
+      - summarize_readiness
+      - block_if_missing_required_inputs

@@ -1,0 +1,11 @@
+{
+  "application_name": "demo-app",
+  "run_id": "localrun-20260326t012954z",
+  "state": "SUCCEEDED",
+  "parameters": {
+    "parameters": {
+      "process_date": "2026-03-25"
+    }
+  },
+  "run_at_utc": "20260326T012954Z"
+}

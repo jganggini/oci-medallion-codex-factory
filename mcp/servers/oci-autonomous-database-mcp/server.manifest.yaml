@@ -1,0 +1,9 @@
+name: oci-autonomous-database-mcp
+runtime: python
+service: autonomous-database
+mirror_output: workspace/oci-mirror/<env>/<compartment>/autonomous_database/
+expected_tools:
+  - create_autonomous_database
+  - download_wallet_metadata
+  - bootstrap_schema
+  - load_gold_objects

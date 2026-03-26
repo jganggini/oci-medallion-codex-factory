@@ -1,0 +1,8 @@
+name: oci-object-storage-mcp
+runtime: python
+service: object-storage
+mirror_output: workspace/oci-mirror/<env>/<compartment>/buckets/
+expected_tools:
+  - create_bucket
+  - upload_object
+  - sync_bucket_manifest

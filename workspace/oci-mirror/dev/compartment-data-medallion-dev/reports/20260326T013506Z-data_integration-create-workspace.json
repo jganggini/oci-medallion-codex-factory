@@ -1,0 +1,14 @@
+{
+  "workspace_name": "ws-di-medallion-dev",
+  "environment": "dev",
+  "created_at_utc": "20260326T013506Z",
+  "extra": {
+    "runtime": "oci",
+    "oci_mode": "plan",
+    "compartment_id": "ocid1.compartment.oc1..exampleuniqueID",
+    "subnet_id": "ocid1.subnet.oc1..exampleuniqueID",
+    "vcn_id": "ocid1.vcn.oc1..exampleuniqueID",
+    "plan_path": "D:\\dev\\oci_data_flow_medallon\\oci-medallion-codex-factory\\workspace\\oci-mirror\\dev\\compartment-data-medallion-dev\\data_integration\\oci-plans\\20260326T013506Z-create-workspace.json",
+    "result_path": null
+  }
+}

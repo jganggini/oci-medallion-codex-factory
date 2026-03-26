@@ -1,0 +1,5 @@
+model = "gpt-5.2"
+reasoning_effort = "medium"
+
+[projects."D:\\dev\\oci_data_flow_medallon\\oci-medallion-codex-factory"]
+trust_level = "trusted"

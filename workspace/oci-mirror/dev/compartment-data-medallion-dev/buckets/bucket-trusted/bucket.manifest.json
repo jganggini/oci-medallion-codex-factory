@@ -1,0 +1,15 @@
+{
+  "bucket_name": "bucket-trusted",
+  "environment": "dev",
+  "created_at_utc": "20260326T013605Z",
+  "metadata": {
+    "display_name": "bucket-trusted",
+    "storage_tier": "Standard",
+    "oci_mode": "plan",
+    "oci_profile": null,
+    "compartment_id": "ocid1.compartment.oc1..exampleuniqueID",
+    "namespace_name": null,
+    "plan_path": "D:\\dev\\oci_data_flow_medallon\\oci-medallion-codex-factory\\workspace\\oci-mirror\\dev\\compartment-data-medallion-dev\\buckets\\oci-plans\\20260326T013605Z-create-bucket.json",
+    "result_path": null
+  }
+}

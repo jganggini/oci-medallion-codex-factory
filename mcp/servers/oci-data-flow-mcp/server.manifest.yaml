@@ -1,0 +1,9 @@
+name: oci-data-flow-mcp
+runtime: python
+service: data-flow
+mirror_output: workspace/oci-mirror/<env>/<compartment>/data_flow/
+expected_tools:
+  - create_application
+  - publish_archive
+  - run_application
+  - collect_run_report

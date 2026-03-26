@@ -1,0 +1,15 @@
+{
+  "name": "compartment-data-medallion-prod",
+  "environment": "prod",
+  "mirror_contract_version": "1.0.0",
+  "services": [
+    "iam",
+    "network",
+    "buckets",
+    "data_flow",
+    "data_integration",
+    "autonomous_database",
+    "vault",
+    "reports"
+  ]
+}

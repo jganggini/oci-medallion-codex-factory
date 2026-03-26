@@ -1,0 +1,10 @@
+name: oci-data-integration-mcp
+runtime: python
+service: data-integration
+mirror_output: workspace/oci-mirror/<env>/<compartment>/data_integration/
+expected_tools:
+  - create_workspace_metadata
+  - create_folder
+  - create_task_from_dataflow
+  - create_pipeline
+  - collect_task_run_report

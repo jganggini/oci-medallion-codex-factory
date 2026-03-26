@@ -1,0 +1,10 @@
+{
+  "application_name": "demo-app",
+  "source_dir": "D:\\dev\\oci_data_flow_medallon\\oci-medallion-codex-factory\\templates\\data_flow\\minimal_app",
+  "main_file": "main.py",
+  "archive_path": "D:\\dev\\oci_data_flow_medallon\\oci-medallion-codex-factory\\workspace\\oci-mirror\\dev\\compartment-data-medallion-dev\\data_flow\\demo-app\\archive.zip",
+  "extra": {
+    "artifact_uri": null
+  },
+  "created_at_utc": "20260326T012954Z"
+}

@@ -1,0 +1,19 @@
+{
+  "environment": "qa",
+  "compartment_name": "compartment-data-medallion-qa",
+  "services": [
+    "iam",
+    "network",
+    "buckets",
+    "data_flow",
+    "data_integration",
+    "autonomous_database",
+    "vault",
+    "reports"
+  ],
+  "buckets": [
+    "bucket-raw",
+    "bucket-trusted",
+    "bucket-refined"
+  ]
+}

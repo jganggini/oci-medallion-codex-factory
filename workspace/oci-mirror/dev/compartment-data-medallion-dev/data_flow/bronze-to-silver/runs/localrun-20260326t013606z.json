@@ -1,0 +1,14 @@
+{
+  "application_name": "bronze-to-silver",
+  "run_id": "localrun-20260326t013606z",
+  "state": "SUCCEEDED",
+  "parameters": {
+    "parameters": {
+      "process_date": "2026-03-25"
+    },
+    "runtime": "oci",
+    "oci_mode": "plan",
+    "application_id": "ocid1.dataflowapplication.oc1..exampleuniqueID"
+  },
+  "run_at_utc": "20260326T013606Z"
+}

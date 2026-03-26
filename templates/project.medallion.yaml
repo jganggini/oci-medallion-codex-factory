@@ -1,0 +1,73 @@
+project_id: sample-project
+domain: generic-domain
+environment: dev
+migration_input_root: workspace/migration-input/sample-project
+
+sql_sources:
+  - sql/
+
+doc_sources:
+  - docs/
+  - notes/
+
+sample_sources:
+  - samples/
+  - exports/
+
+target_layers:
+  bronze: true
+  silver: true
+  gold: true
+
+network_profile:
+  compartment_strategy: by-environment
+  compartment_name: data-medallion-dev
+  vcn_name: vcn-data-medallion-dev
+  subnet_strategy: private-by-service
+  private_endpoints:
+    data_flow: true
+    data_integration: true
+    autonomous: true
+  nsgs:
+    - nsg-data-flow
+    - nsg-data-integration
+    - nsg-autonomous
+
+autonomous_profile:
+  enabled: true
+  database_name: adb_sample_gold
+  database_user: app_gold
+  wallet_dir: .local/autonomous/wallets/dev/adb_sample_gold
+  load_strategy: single-writer-batch
+  publish_objects:
+    - agg_resumen_archivos_trafico
+
+dataflow_jobs:
+  - name: bronze_to_silver
+    enabled: true
+    layer_from: bronze
+    layer_to: silver
+  - name: silver_to_gold
+    enabled: true
+    layer_from: silver
+    layer_to: gold
+  - name: gold_loader
+    enabled: true
+    target: autonomous
+
+di_pipeline:
+  enabled: true
+  workspace_name: di-medallion-dev
+  application: medallion-orchestrator
+
+validation_rules:
+  require_sql: true
+  require_docs: true
+  require_samples_or_exports: true
+  require_ddl: false
+  require_mappings: false
+
+approvals:
+  provisioning_required: true
+  publish_required: true
+  ddl_required: true

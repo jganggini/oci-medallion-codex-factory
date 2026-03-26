@@ -1,0 +1,9 @@
+name: oci-iam-mcp
+runtime: python
+service: iam
+mirror_output: workspace/oci-mirror/<env>/<compartment>/iam/
+expected_tools:
+  - create_compartment
+  - create_group
+  - create_policy
+  - export_iam_manifest

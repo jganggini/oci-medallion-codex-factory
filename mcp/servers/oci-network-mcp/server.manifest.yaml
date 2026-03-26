@@ -1,0 +1,9 @@
+name: oci-network-mcp
+runtime: python
+service: core-network
+mirror_output: workspace/oci-mirror/<env>/<compartment>/network/
+expected_tools:
+  - create_vcn
+  - create_subnet
+  - create_nsg
+  - export_network_manifest

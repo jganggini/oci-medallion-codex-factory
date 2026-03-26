@@ -1,0 +1,9 @@
+name: oci-vault-mcp
+runtime: python
+service: vault
+mirror_output: workspace/oci-mirror/<env>/<compartment>/vault/
+expected_tools:
+  - create_vault
+  - create_secret
+  - rotate_secret_reference
+  - export_vault_manifest

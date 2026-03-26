@@ -1,0 +1,8 @@
+{
+  "workspace_name": "ws-di-medallion-dev",
+  "pipeline_name": "medallion-demo",
+  "tasks": [
+    "run-demo-app"
+  ],
+  "created_at_utc": "20260326T012954Z"
+}

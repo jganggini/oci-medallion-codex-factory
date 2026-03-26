@@ -1,0 +1,29 @@
+services:
+  dev-base:
+    build:
+      context: .
+      dockerfile: docker/dev-base.Dockerfile
+    image: oci-medallion-codex-factory/dev-base:latest
+    working_dir: /workspace
+    volumes:
+      - ./:/workspace
+    tty: true
+
+  oci-runner:
+    build:
+      context: .
+      dockerfile: docker/oci-runner.Dockerfile
+    image: oci-medallion-codex-factory/oci-runner:latest
+    working_dir: /workspace
+    volumes:
+      - ./:/workspace
+      - ./.local/oci:/mnt/oci
+    tty: true
+
+  mcphub:
+    image: samanhappy/mcphub:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./:/workspace
+      - ./docker/mcphub:/app/config

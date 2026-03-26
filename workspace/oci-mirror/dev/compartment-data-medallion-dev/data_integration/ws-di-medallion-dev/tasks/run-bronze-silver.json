@@ -1,0 +1,15 @@
+{
+  "workspace_name": "ws-di-medallion-dev",
+  "task_name": "run-bronze-silver",
+  "application_name": "bronze-to-silver",
+  "created_at_utc": "20260326T013606Z",
+  "extra": {
+    "runtime": "oci",
+    "oci_mode": "plan",
+    "workspace_id": "ocid1.disworkspace.oc1..exampleuniqueID",
+    "folder_key": "FOLDER_001",
+    "application_id": "ocid1.dataflowapplication.oc1..exampleuniqueID",
+    "plan_path": "D:\\dev\\oci_data_flow_medallon\\oci-medallion-codex-factory\\workspace\\oci-mirror\\dev\\compartment-data-medallion-dev\\data_integration\\oci-plans\\20260326T013606Z-create-task-from-dataflow.json",
+    "result_path": null
+  }
+}

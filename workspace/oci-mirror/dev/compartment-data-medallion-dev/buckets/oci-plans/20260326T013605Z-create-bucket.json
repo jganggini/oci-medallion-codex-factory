@@ -1,0 +1,30 @@
+{
+  "service": "buckets",
+  "operation": "create-bucket",
+  "apply_mode": "plan",
+  "command": [
+    "docker",
+    "run",
+    "--rm",
+    "-v",
+    "D:\\dev\\oci_data_flow_medallon\\oci-medallion-codex-factory:/workspace",
+    "-v",
+    "D:\\dev\\oci_data_flow_medallon\\oci-medallion-codex-factory\\.local\\oci:/mnt/oci",
+    "-w",
+    "/workspace",
+    "-e",
+    "OCI_CLI_CONFIG_FILE=/mnt/oci/config",
+    "ghcr.io/oracle/oci-cli:latest",
+    "os",
+    "bucket",
+    "create",
+    "--name",
+    "bucket-trusted",
+    "--compartment-id",
+    "ocid1.compartment.oc1..exampleuniqueID",
+    "--storage-tier",
+    "Standard"
+  ],
+  "command_shell": "'docker' 'run' '--rm' '-v' 'D:\\dev\\oci_data_flow_medallon\\oci-medallion-codex-factory:/workspace' '-v' 'D:\\dev\\oci_data_flow_medallon\\oci-medallion-codex-factory\\.local\\oci:/mnt/oci' '-w' '/workspace' '-e' 'OCI_CLI_CONFIG_FILE=/mnt/oci/config' 'ghcr.io/oracle/oci-cli:latest' 'os' 'bucket' 'create' '--name' 'bucket-trusted' '--compartment-id' 'ocid1.compartment.oc1..exampleuniqueID' '--storage-tier' 'Standard'",
+  "created_at_utc": "20260326T013605Z"
+}

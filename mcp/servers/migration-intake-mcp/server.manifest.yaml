@@ -1,0 +1,9 @@
+name: migration-intake-mcp
+runtime: python
+entrypoint: server.py
+project_scope: workspace/migration-input/<project_id>/
+mirror_output: workspace/migration-input/<project_id>/_inventory/
+commands:
+  - inventory
+  - validate
+  - summarize

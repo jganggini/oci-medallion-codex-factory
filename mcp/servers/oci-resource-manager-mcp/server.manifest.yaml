@@ -1,0 +1,9 @@
+name: oci-resource-manager-mcp
+runtime: python
+service: resource-manager
+mirror_output: workspace/oci-mirror/<env>/<compartment>/reports/
+expected_tools:
+  - create_stack
+  - plan_stack
+  - apply_stack
+  - export_stack_report
