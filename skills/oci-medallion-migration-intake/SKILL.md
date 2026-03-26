@@ -5,7 +5,7 @@ Usa esta skill para revisar `workspace/migration-input/<project_id>/`.
 ## Responsabilidades
 
 - ejecutar el inventory de insumos
-- detectar faltantes de SQL, docs y muestras
+- detectar faltantes de SQL, scripts, data, docs, referencias y muestras
 - generar resumen de readiness
 - bloquear scaffold si faltan insumos minimos
 

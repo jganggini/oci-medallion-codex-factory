@@ -8,6 +8,14 @@ migration_input_root: workspace/migration-input/sample-project
 sql_sources:
   - sql/
 
+script_sources:
+  - scripts/
+
+data_sources:
+  - data/
+  - samples/
+  - exports/
+
 doc_sources:
   - docs/
   - notes/
@@ -15,6 +23,11 @@ doc_sources:
 sample_sources:
   - samples/
   - exports/
+
+reference_doc_sources:
+  - references/
+
+pending_input_deliveries: []
 
 target_layers:
   landing_external: true

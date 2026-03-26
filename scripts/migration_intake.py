@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 REQUIRED_DIRS = ("sql", "docs", "ddl", "samples", "exports", "mappings", "notes")
-OPTIONAL_DIRS = ("quality/contracts", "quality/sql", "lineage", "source-assets")
+OPTIONAL_DIRS = ("scripts", "data", "references", "quality/contracts", "quality/sql", "lineage", "source-assets")
 INTERESTING_SUFFIXES = {
     "sql": {".sql", ".pls", ".pks", ".pkb"},
     "docs": {".doc", ".docx", ".pdf", ".md", ".txt"},
@@ -15,6 +15,9 @@ INTERESTING_SUFFIXES = {
     "exports": {".csv", ".xlsx", ".txt", ".json"},
     "mappings": {".csv", ".xlsx", ".json", ".yaml", ".yml"},
     "notes": {".md", ".txt", ".docx"},
+    "scripts": {".sql", ".py", ".ps1", ".sh", ".bash", ".bat", ".cmd", ".ksh", ".yaml", ".yml", ".json"},
+    "data": {".csv", ".txt", ".dat", ".json", ".parquet", ".avro", ".orc", ".xlsx"},
+    "references": {".pdf", ".doc", ".docx", ".md", ".txt", ".xlsx", ".ppt", ".pptx", ".csv"},
     "quality/contracts": {".json"},
     "quality/sql": {".sql", ".txt"},
     "lineage": {".json", ".yaml", ".yml", ".sql", ".md"},
@@ -25,6 +28,9 @@ IMPORTANT_KEYWORDS = {
     "docs": ("descripcion", "regla", "diccionario", "layout", "script", "analisis"),
     "samples": ("sample", "muestra", "raw", "input"),
     "exports": ("export", "output", "gold", "esperado"),
+    "scripts": ("etl", "batch", "load", "spark", "flow", "job", "wrapper", "run"),
+    "data": ("data", "input", "source", "landing", "raw", "snapshot", "delta"),
+    "references": ("manual", "layout", "diccionario", "regla", "referencia", "lineage", "mapping"),
     "quality/contracts": ("contract", "quality", "qa", "gate"),
     "quality/sql": ("qa", "quality", "reconcile", "count", "hash"),
     "lineage": ("lineage", "openlineage", "catalog"),
@@ -88,12 +94,16 @@ def build_inventory(repo_root: Path, project_root: Path) -> dict[str, object]:
         blockers.append("No se encontraron archivos SQL heredados en sql/.")
     if not sections["docs"]:
         blockers.append("No se encontraron documentos funcionales en docs/.")
-    if not sections["samples"] and not sections["exports"]:
-        blockers.append("No se encontraron muestras de datos ni exports de referencia.")
+    if not sections["samples"] and not sections["exports"] and not optional_sections["data"]:
+        blockers.append("No se encontraron archivos de datos en data/, muestras en samples/ ni exports de referencia en exports/.")
     if not sections["ddl"]:
         warnings.append("No se encontraron DDL en ddl/.")
     if not sections["mappings"]:
         warnings.append("No se encontraron mappings en mappings/.")
+    if not optional_sections["scripts"]:
+        warnings.append("No se encontraron scripts heredados o wrappers tecnicos en scripts/.")
+    if not optional_sections["references"]:
+        warnings.append("No se encontraron documentos de referencia en references/.")
     if private_exists and (not sections["sql"] or not sections["docs"]):
         warnings.append(
             "Existe una zona privada en .local/migration-private/. Revisa si hay insumos sensibles que deban sanitizarse y copiarse al workspace canonico."
@@ -103,6 +113,10 @@ def build_inventory(repo_root: Path, project_root: Path) -> dict[str, object]:
         "Revisar inventory.md y completar los faltantes.",
         "Asegurar que project.medallion.yaml referencie migration_input_root correctamente.",
     ]
+    if not optional_sections["scripts"]:
+        next_steps.append("Agregar scripts heredados, wrappers o utilitarios en scripts/ si forman parte de la migracion.")
+    if not optional_sections["references"]:
+        next_steps.append("Agregar documentacion de referencia en references/ si existen layouts, manuales o reglas funcionales adicionales.")
     if not optional_sections["quality/contracts"]:
         next_steps.append("Definir contratos de QA si el proyecto requiere gate de migracion o reconciliacion por slice.")
     if not optional_sections["source-assets"]:

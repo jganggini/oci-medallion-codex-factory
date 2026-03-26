@@ -11,7 +11,10 @@ Es la zona canonica para que el usuario cargue insumos de migracion.
 Estructura:
 
 - `workspace/migration-input/<project_id>/sql/`
+- `workspace/migration-input/<project_id>/scripts/`
+- `workspace/migration-input/<project_id>/data/`
 - `workspace/migration-input/<project_id>/docs/`
+- `workspace/migration-input/<project_id>/references/`
 - `workspace/migration-input/<project_id>/ddl/`
 - `workspace/migration-input/<project_id>/samples/`
 - `workspace/migration-input/<project_id>/exports/`
@@ -46,3 +49,9 @@ Estructura sugerida:
 - `.local/migration-private/<project_id>/...`
 
 `migration-private/` existe para casos donde parte del material fuente no debe entrar al workspace versionado. El intake oficial sigue trabajando sobre `workspace/migration-input/<project_id>/`.
+
+Si durante la entrevista el usuario dice que luego entregara archivos, el plan debe registrar siempre:
+
+- ruta fuente exacta donde hoy estan los archivos
+- ruta destino exacta dentro de `workspace/migration-input/<project_id>/...` o `.local/migration-private/<project_id>/...`
+- tipo de insumo: `sql`, `scripts`, `data`, `references`, `samples` o `exports`

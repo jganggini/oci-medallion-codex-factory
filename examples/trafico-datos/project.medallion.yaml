@@ -8,6 +8,14 @@ migration_input_root: workspace/migration-input/trafico-datos
 sql_sources:
   - sql/
 
+script_sources:
+  - scripts/
+
+data_sources:
+  - data/
+  - samples/
+  - exports/
+
 doc_sources:
   - docs/
   - notes/
@@ -15,6 +23,19 @@ doc_sources:
 sample_sources:
   - samples/
   - exports/
+
+reference_doc_sources:
+  - references/
+
+pending_input_deliveries:
+  - kind: scripts
+    source_path: D:/fuentes/trafico/scripts
+    target_path: workspace/migration-input/trafico-datos/scripts
+    status: pending_delivery
+  - kind: references
+    source_path: D:/fuentes/trafico/referencias
+    target_path: workspace/migration-input/trafico-datos/references
+    status: pending_delivery
 
 target_layers:
   landing_external: true

@@ -9,6 +9,7 @@ La idea no es solo ejecutar scripts. La idea es que Codex:
 - descubra en que etapa esta el proyecto
 - te diga que insumos faltan
 - te indique exactamente donde colocar cada archivo
+- te pida SQL, scripts heredados, data y documentacion de referencia desde la entrevista inicial
 - diferencie buckets existentes de capas realmente implementadas
 - asuma por defecto una ruta completa `landing_external -> bronze_raw -> silver_trusted -> gold_refined -> gold_adb`
 - te lleve paso a paso por intake, bootstrap, publicacion, lineage, QA, validacion y reprocesos parciales
@@ -27,14 +28,16 @@ Trabaja asi:
 1. inspecciona el repo y detecta la etapa actual
 2. hazme preguntas una por una
 3. si falta un archivo, dime exactamente en que ruta debe ir y que contenido minimo esperas
-4. asume por defecto un despliegue end-to-end hasta Autonomous Database, con entrega final en gold_adb
-5. solo pregunta por un alcance parcial si yo lo pido de forma explicita
-6. pregunta si ya existe algun bucket o source asset con informacion, a que capa pertenece y si la carga se hara aparte
-7. no asumas que un bucket con datos significa que ya existen todas las capas
-8. no asumas credenciales, wallets, OCIDs ni tfvars
-9. antes de ejecutar cambios, resume el plan por etapas
-10. cuando cierres las preguntas y el plan inicial, levanta Docker con docker compose up -d antes de intake, bootstrap o publish
-11. guiame hasta dejar el proyecto listo para desplegar, migrar, validar y reprocesar por slice
+4. pregunta explicitamente por SQL, scripts heredados, data o csv/parquet y documentacion de referencia
+5. si te digo que luego te pasare archivos, exigeme la ruta exacta donde estan hoy y la ruta destino dentro de workspace/migration-input/<project_id>/ o .local/migration-private/<project_id>/
+6. asume por defecto un despliegue end-to-end hasta Autonomous Database, con entrega final en gold_adb
+7. solo pregunta por un alcance parcial si yo lo pido de forma explicita
+8. pregunta si ya existe algun bucket o source asset con informacion, a que capa pertenece y si la carga se hara aparte
+9. no asumas que un bucket con datos significa que ya existen todas las capas
+10. no asumas credenciales, wallets, OCIDs ni tfvars
+11. antes de ejecutar cambios, resume el plan por etapas
+12. cuando cierres las preguntas y el plan inicial, levanta Docker con docker compose up -d antes de intake, bootstrap o publish
+13. guiame hasta dejar el proyecto listo para desplegar, migrar, validar y reprocesar por slice
 ```
 
 ## Modo recomendado
@@ -49,11 +52,12 @@ Cuando el flujo funciona bien, Codex deberia responder en este orden:
 
 1. etapa actual
 2. confirmar que la ruta objetivo por defecto llega hasta `gold_adb`, salvo restriccion explicita
-3. primer dato faltante
-4. ruta exacta donde debes colocar el insumo
-5. plan inicial por etapas
-6. levantar Docker temprano antes de intake o bootstrap si todavia no esta arriba
-7. siguiente accion que hara cuando confirmes
+3. pedir SQL, scripts, data y documentacion de referencia faltante
+4. si un insumo aun no fue copiado, pedir ruta fuente exacta y ruta destino exacta
+5. ruta exacta donde debes colocar el insumo
+6. plan inicial por etapas
+7. levantar Docker temprano antes de intake o bootstrap si todavia no esta arriba
+8. siguiente accion que hara cuando confirmes
 
 ## Secuencia sugerida
 

@@ -22,17 +22,26 @@ Usa esta skill para convertir una solicitud abierta en un plan operable, guiado 
 3. asumir por defecto un despliegue end-to-end hasta `gold_adb` en Autonomous Database
 4. no preguntar si el alcance es parcial o total salvo que el usuario ya haya restringido capas, servicios o entregables
 5. entrevistar al usuario con una sola pregunta material por turno
-6. cuando falte un insumo, indicar exactamente:
+6. preguntar explicitamente por estos insumos si aun no estan claros:
+   - SQL y DDL heredado
+   - scripts heredados o wrappers operativos
+   - data fuente, CSV, Parquet, muestras o exports
+   - documentacion funcional y documentacion de referencia
+7. cuando falte un insumo, indicar exactamente:
    - ruta
    - archivo o carpeta esperada
    - si es obligatorio u opcional
    - contenido minimo esperado
-7. preguntar explicitamente si ya existe algun bucket o source asset con informacion, a que capa pertenece y si la carga de archivos se hara por fuera de este flujo
-8. no asumir que un bucket poblado significa que ya existen todas las capas landing, bronze, silver, refined y gold
-9. confirmar si el proyecto necesita control plane, Data Catalog, lineage hibrido y reproceso por `run+slice`
-10. despues de cerrar discovery y presentar el plan inicial, levantar `docker compose up -d` antes de intake, bootstrap, scaffold o publish si el runtime local todavia no esta arriba
-11. no pasar a `oci-mode apply` hasta confirmar credenciales locales, ambiente objetivo, region, OCIDs, private endpoints y wallets si aplican
-12. derivar al siguiente skill segun la etapa:
+8. si el usuario dice que luego entregara archivos, exigir siempre:
+   - `source_path` exacto donde estan hoy
+   - `target_path` exacto dentro de `workspace/migration-input/<project_id>/...` o `.local/migration-private/<project_id>/...`
+   - tipo de insumo pendiente
+9. preguntar explicitamente si ya existe algun bucket o source asset con informacion, a que capa pertenece y si la carga de archivos se hara por fuera de este flujo
+10. no asumir que un bucket poblado significa que ya existen todas las capas landing, bronze, silver, refined y gold
+11. confirmar si el proyecto necesita control plane, Data Catalog, lineage hibrido y reproceso por `run+slice`
+12. despues de cerrar discovery y presentar el plan inicial, levantar `docker compose up -d` antes de intake, bootstrap, scaffold o publish si el runtime local todavia no esta arriba
+13. no pasar a `oci-mode apply` hasta confirmar credenciales locales, ambiente objetivo, region, OCIDs, private endpoints y wallets si aplican
+14. derivar al siguiente skill segun la etapa:
    - `oci-medallion-migration-intake`
    - `oci-medallion-bootstrap`
    - `oci-medallion-network-foundation`
@@ -42,7 +51,7 @@ Usa esta skill para convertir una solicitud abierta en un plan operable, guiado 
    - `oci-terraform-fallback`
    - `oci-medallion-validate`
    - `oci-medallion-incident`
-13. cerrar cada etapa con:
+15. cerrar cada etapa con:
    - que quedo listo
    - que falta
    - siguiente paso concreto
@@ -53,6 +62,10 @@ Hazlas de una en una y solo si son necesarias:
 
 - cual es el `project_id`
 - si el usuario ya tiene insumos en `workspace/migration-input/<project_id>/`
+- si ya tiene SQL, DDL y scripts heredados, y en que rutas exactas estan
+- si ya tiene archivos de data, CSV, Parquet, samples o exports, y en que rutas exactas estan
+- si ya tiene documentacion funcional o documentacion de referencia, y en que rutas exactas estan
+- si alguno de esos archivos se entregara despues, cual es el `source_path` actual y el `target_path` planeado
 - si trabajara en `dev`, `qa` o `prod`
 - si ya existe algun bucket o source asset con datos
 - a que capa corresponde cada bucket existente: `landing_external`, `bronze_raw`, `silver_trusted`, `gold_refined` o `gold_adb`
@@ -66,6 +79,7 @@ Hazlas de una en una y solo si son necesarias:
 
 - checklist claro de insumos
 - rutas exactas para colocar archivos
+- rutas fuente y destino para cualquier insumo prometido pero aun no copiado
 - siguiente skill o script a ejecutar
 - plan de despliegue o migracion por etapas
 - `docker compose up -d` programado o ejecutado inmediatamente despues del plan inicial
