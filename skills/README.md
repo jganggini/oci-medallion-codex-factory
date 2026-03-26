@@ -18,12 +18,13 @@ Skills de Codex para operar el factory medallion en OCI.
 ## Secuencia recomendada
 
 1. advisor
-2. intake
-3. bootstrap
-4. network foundation
-5. scaffold
-6. publish
-7. qa
-8. terraform fallback cuando un recurso OCI no este claro, exista drift o falle el despliegue
-9. validate
-10. incident solo cuando haya fallos operativos
+2. `docker compose up -d` despues de discovery y del plan inicial
+3. intake
+4. bootstrap
+5. network foundation
+6. scaffold
+7. publish
+8. qa
+9. terraform fallback cuando un recurso OCI no este claro, exista drift o falle el despliegue
+10. validate
+11. incident solo cuando haya fallos operativos

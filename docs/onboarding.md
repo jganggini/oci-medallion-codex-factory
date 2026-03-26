@@ -20,10 +20,11 @@
 7. Coloca wallets en `.local/autonomous/wallets/<env>/<adb_name>/`.
 8. Levanta Docker con `docker compose up -d`.
 9. Si quieres que Codex te guie paso a paso, abre `docs/codex-advisor.md` y empieza con `oci-medallion-advisor`.
-10. Ejecuta `python scripts/migration_intake.py --repo-root . --project-id <project_id>`.
-11. Revisa `workspace/migration-input/<project_id>/_inventory/inventory.md`.
-12. Ajusta `project.medallion.yaml`, especialmente `deployment_scope`, `delivery_target`, `existing_buckets`, `source_assets`, `control_plane`, `lineage` y `reprocess`.
-13. Ejecuta las skills en este orden:
+10. Dentro del flujo guiado, Codex debe volver a ubicar este paso inmediatamente despues de discovery y del plan inicial si detecta que Docker aun no esta arriba.
+11. Ejecuta `python scripts/migration_intake.py --repo-root . --project-id <project_id>`.
+12. Revisa `workspace/migration-input/<project_id>/_inventory/inventory.md`.
+13. Ajusta `project.medallion.yaml`, especialmente `deployment_scope`, `delivery_target`, `existing_buckets`, `source_assets`, `control_plane`, `lineage` y `reprocess`.
+14. Ejecuta las skills en este orden:
     - `oci-medallion-advisor`
     - `oci-medallion-migration-intake`
     - `oci-medallion-bootstrap`
@@ -43,5 +44,6 @@ Al terminar el onboarding, el repo debe tener:
 - `workspace/migration-input/<project_id>/` listo para intake
 - inventario de insumos generado
 - `project.medallion.yaml` con alcance por defecto hasta `gold_adb`, capas, buckets y assets correctamente descritos
+- runtime Docker levantado antes de intake, bootstrap y publish
 - bootstrap del control plane listo para ADB
 - base lista para crear foundation OCI, scaffold del proyecto y QA por slice

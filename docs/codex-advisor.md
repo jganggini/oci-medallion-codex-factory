@@ -33,7 +33,8 @@ Trabaja asi:
 7. no asumas que un bucket con datos significa que ya existen todas las capas
 8. no asumas credenciales, wallets, OCIDs ni tfvars
 9. antes de ejecutar cambios, resume el plan por etapas
-10. guiame hasta dejar el proyecto listo para desplegar, migrar, validar y reprocesar por slice
+10. cuando cierres las preguntas y el plan inicial, levanta Docker con docker compose up -d antes de intake, bootstrap o publish
+11. guiame hasta dejar el proyecto listo para desplegar, migrar, validar y reprocesar por slice
 ```
 
 ## Modo recomendado
@@ -50,19 +51,22 @@ Cuando el flujo funciona bien, Codex deberia responder en este orden:
 2. confirmar que la ruta objetivo por defecto llega hasta `gold_adb`, salvo restriccion explicita
 3. primer dato faltante
 4. ruta exacta donde debes colocar el insumo
-5. siguiente accion que hara cuando confirmes
+5. plan inicial por etapas
+6. levantar Docker temprano antes de intake o bootstrap si todavia no esta arriba
+7. siguiente accion que hara cuando confirmes
 
 ## Secuencia sugerida
 
 1. `oci-medallion-advisor`
-2. `oci-medallion-migration-intake`
-3. `oci-medallion-bootstrap`
-4. `oci-medallion-network-foundation`
-5. `oci-medallion-scaffold`
-6. `oci-medallion-publish`
-7. `oci-medallion-qa`
-8. `oci-terraform-fallback` si algun recurso OCI o Terraform no esta claro
-9. `oci-medallion-validate`
+2. `docker compose up -d` cuando termine discovery y el plan inicial
+3. `oci-medallion-migration-intake`
+4. `oci-medallion-bootstrap`
+5. `oci-medallion-network-foundation`
+6. `oci-medallion-scaffold`
+7. `oci-medallion-publish`
+8. `oci-medallion-qa`
+9. `oci-terraform-fallback` si algun recurso OCI o Terraform no esta claro
+10. `oci-medallion-validate`
 
 ## Cuando pedir plan y cuando pedir ejecucion
 

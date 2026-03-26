@@ -39,12 +39,13 @@ Cada MCP debe:
 ## Orden recomendado
 
 1. `oci-medallion-advisor`
-2. `oci-medallion-migration-intake`
-3. `oci-medallion-bootstrap`
-4. `oci-medallion-network-foundation`
-5. `oci-medallion-scaffold`
-6. `oci-medallion-publish`
-7. `oci-medallion-qa`
-8. `oci-terraform-fallback` cuando el provider OCI, el recurso Terraform o el drift no esten claros
-9. `oci-medallion-validate`
-10. `oci-medallion-incident` solo cuando exista un fallo operativo o de despliegue
+2. `docker compose up -d` despues de discovery y del plan inicial
+3. `oci-medallion-migration-intake`
+4. `oci-medallion-bootstrap`
+5. `oci-medallion-network-foundation`
+6. `oci-medallion-scaffold`
+7. `oci-medallion-publish`
+8. `oci-medallion-qa`
+9. `oci-terraform-fallback` cuando el provider OCI, el recurso Terraform o el drift no esten claros
+10. `oci-medallion-validate`
+11. `oci-medallion-incident` solo cuando exista un fallo operativo o de despliegue

@@ -70,7 +70,8 @@ Trabaja asi:
 7. no asumas que un bucket con datos significa que ya existen todas las capas landing, bronze, silver, refined o gold
 8. no asumas credenciales, wallets, OCIDs ni tfvars
 9. antes de ejecutar cambios, resume el plan por etapas
-10. guiame hasta dejar el proyecto listo para desplegar, migrar, validar y reprocesar por slice
+10. cuando cierres las preguntas y el plan inicial, levanta Docker con docker compose up -d antes de intake, bootstrap o publish
+11. guiame hasta dejar el proyecto listo para desplegar, migrar, validar y reprocesar por slice
 ```
 
 Con ese prompt, Codex deberia ayudarte a:
@@ -81,6 +82,7 @@ Con ese prompt, Codex deberia ayudarte a:
 - preguntar si ya existe algun bucket o asset con informacion y si corresponde a `landing_external`, `bronze_raw`, `silver_trusted`, `gold_refined` o `gold_adb`
 - no preguntarte si quieres un despliegue parcial o total salvo que tu mismo limites el alcance
 - no asumir que tener un bucket con datos implica que toda la arquitectura medallion ya esta creada
+- levantar Docker temprano, apenas termine discovery y el plan inicial
 - decidir si corresponde intake, scaffold, publish, lineage, QA o validacion
 
 ## Contratos clave

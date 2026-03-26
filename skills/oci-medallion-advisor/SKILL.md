@@ -30,8 +30,9 @@ Usa esta skill para convertir una solicitud abierta en un plan operable, guiado 
 7. preguntar explicitamente si ya existe algun bucket o source asset con informacion, a que capa pertenece y si la carga de archivos se hara por fuera de este flujo
 8. no asumir que un bucket poblado significa que ya existen todas las capas landing, bronze, silver, refined y gold
 9. confirmar si el proyecto necesita control plane, Data Catalog, lineage hibrido y reproceso por `run+slice`
-10. no pasar a `oci-mode apply` hasta confirmar credenciales locales, ambiente objetivo, region, OCIDs, private endpoints y wallets si aplican
-11. derivar al siguiente skill segun la etapa:
+10. despues de cerrar discovery y presentar el plan inicial, levantar `docker compose up -d` antes de intake, bootstrap, scaffold o publish si el runtime local todavia no esta arriba
+11. no pasar a `oci-mode apply` hasta confirmar credenciales locales, ambiente objetivo, region, OCIDs, private endpoints y wallets si aplican
+12. derivar al siguiente skill segun la etapa:
    - `oci-medallion-migration-intake`
    - `oci-medallion-bootstrap`
    - `oci-medallion-network-foundation`
@@ -41,7 +42,7 @@ Usa esta skill para convertir una solicitud abierta en un plan operable, guiado 
    - `oci-terraform-fallback`
    - `oci-medallion-validate`
    - `oci-medallion-incident`
-12. cerrar cada etapa con:
+13. cerrar cada etapa con:
    - que quedo listo
    - que falta
    - siguiente paso concreto
@@ -67,6 +68,7 @@ Hazlas de una en una y solo si son necesarias:
 - rutas exactas para colocar archivos
 - siguiente skill o script a ejecutar
 - plan de despliegue o migracion por etapas
+- `docker compose up -d` programado o ejecutado inmediatamente despues del plan inicial
 - ruta base `landing_external -> bronze_raw -> silver_trusted -> gold_refined -> gold_adb` salvo restriccion explicita
 - clasificacion clara de buckets existentes versus capas realmente creadas
 - estrategia de QA y reproceso por slice
