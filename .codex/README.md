@@ -1,11 +1,14 @@
 # .codex
 
-Shared Codex repository configuration lives here.
+This folder is intentionally lightweight.
 
-Recommended use:
+Purpose:
 
-- repository-level defaults in `config.toml`
-- shared rules in `rules/`
-- shared prompts or reusable guidance in `prompts/`
+- store repository-level Codex helper notes or rules
+- avoid mixing user-global Codex configuration into the template
 
-The operational migration and OCI skills for this project remain in the top-level `skills/` directory.
+Important:
+
+- project workflow skills live in `skills/`
+- user-global Codex configuration is expected to live outside the repo
+- this repository does not require a local `.codex/config.toml`
