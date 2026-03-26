@@ -4,5 +4,5 @@ service: quality
 mirror_output: workspace/oci-mirror/<env>/<compartment>/quality/
 expected_tools:
   - profile_bucket_data
-  - run_quality_contract
+  - run_contract
   - gate_migration

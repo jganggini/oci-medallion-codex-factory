@@ -6,6 +6,7 @@ from pathlib import Path
 
 
 REQUIRED_DIRS = ("sql", "docs", "ddl", "samples", "exports", "mappings", "notes")
+OPTIONAL_DIRS = ("quality/contracts", "quality/sql", "lineage", "source-assets")
 INTERESTING_SUFFIXES = {
     "sql": {".sql", ".pls", ".pks", ".pkb"},
     "docs": {".doc", ".docx", ".pdf", ".md", ".txt"},
@@ -14,12 +15,20 @@ INTERESTING_SUFFIXES = {
     "exports": {".csv", ".xlsx", ".txt", ".json"},
     "mappings": {".csv", ".xlsx", ".json", ".yaml", ".yml"},
     "notes": {".md", ".txt", ".docx"},
+    "quality/contracts": {".json"},
+    "quality/sql": {".sql", ".txt"},
+    "lineage": {".json", ".yaml", ".yml", ".sql", ".md"},
+    "source-assets": {".json", ".yaml", ".yml", ".csv", ".md"},
 }
 IMPORTANT_KEYWORDS = {
     "sql": ("agg", "proc", "package", "trafico", "resumen", "etl"),
     "docs": ("descripcion", "regla", "diccionario", "layout", "script", "analisis"),
     "samples": ("sample", "muestra", "raw", "input"),
     "exports": ("export", "output", "gold", "esperado"),
+    "quality/contracts": ("contract", "quality", "qa", "gate"),
+    "quality/sql": ("qa", "quality", "reconcile", "count", "hash"),
+    "lineage": ("lineage", "openlineage", "catalog"),
+    "source-assets": ("bucket", "asset", "source", "landing"),
 }
 
 
@@ -56,11 +65,18 @@ def build_inventory(repo_root: Path, project_root: Path) -> dict[str, object]:
     missing = [name for name in REQUIRED_DIRS if not (project_root / name).exists()]
     sections: dict[str, list[dict[str, object]]] = {}
     candidates: dict[str, list[str]] = {}
+    optional_sections: dict[str, list[dict[str, object]]] = {}
+    optional_candidates: dict[str, list[str]] = {}
 
     for name in REQUIRED_DIRS:
         folder = project_root / name
         sections[name] = collect_files(folder, INTERESTING_SUFFIXES[name]) if folder.exists() else []
         candidates[name] = detect_candidates(name, sections[name])
+
+    for name in OPTIONAL_DIRS:
+        folder = project_root / name
+        optional_sections[name] = collect_files(folder, INTERESTING_SUFFIXES[name]) if folder.exists() else []
+        optional_candidates[name] = detect_candidates(name, optional_sections[name])
 
     private_root = repo_root / ".local" / "migration-private" / project_root.name
     private_exists = private_root.exists()
@@ -87,6 +103,10 @@ def build_inventory(repo_root: Path, project_root: Path) -> dict[str, object]:
         "Revisar inventory.md y completar los faltantes.",
         "Asegurar que project.medallion.yaml referencie migration_input_root correctamente.",
     ]
+    if not optional_sections["quality/contracts"]:
+        next_steps.append("Definir contratos de QA si el proyecto requiere gate de migracion o reconciliacion por slice.")
+    if not optional_sections["source-assets"]:
+        next_steps.append("Documentar source assets o buckets existentes si la ingesta llega por fuera del factory.")
     if blockers:
         next_steps.append("No iniciar scaffold hasta resolver blockers.")
     else:
@@ -100,6 +120,8 @@ def build_inventory(repo_root: Path, project_root: Path) -> dict[str, object]:
         "missing_directories": missing,
         "sections": sections,
         "candidate_files": candidates,
+        "optional_sections": optional_sections,
+        "optional_candidate_files": optional_candidates,
         "blockers": blockers,
         "warnings": warnings,
         "ready_for_scaffold": len(blockers) == 0 and len(missing) == 0,
@@ -151,6 +173,20 @@ def render_markdown(inventory: dict[str, object]) -> str:
                 lines.append(f"  - `{item}`")
         lines.append("")
 
+    lines.append("## Optional sections")
+    for section, files in inventory["optional_sections"].items():
+        lines.append(f"### {section}")
+        if not files:
+            lines.append("- No files detected")
+        else:
+            for item in files:
+                lines.append(f"- `{item['relative_path']}` ({item['size_bytes']} bytes)")
+        if inventory["optional_candidate_files"].get(section):
+            lines.append("- Candidate files:")
+            for item in inventory["optional_candidate_files"][section]:
+                lines.append(f"  - `{item}`")
+        lines.append("")
+
     lines.append("## Next steps")
     for step in inventory["next_steps"]:
         lines.append(f"- {step}")
@@ -185,6 +221,7 @@ def main() -> int:
                 "migration_input_root": str(project_root),
                 "ready_for_scaffold": inventory["ready_for_scaffold"],
                 "candidate_files": inventory["candidate_files"],
+                "optional_candidate_files": inventory["optional_candidate_files"],
                 "next_steps": inventory["next_steps"],
             },
             indent=2,

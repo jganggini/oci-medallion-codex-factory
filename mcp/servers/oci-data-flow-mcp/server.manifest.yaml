@@ -3,10 +3,9 @@ runtime: python
 service: data-flow
 mirror_output: workspace/oci-mirror/<env>/<compartment>/data_flow/
 expected_tools:
-  - package_dependency_archive
-  - validate_dependency_archive
+  - package_dependencies
+  - validate_archive
   - create_application
   - update_application
-  - publish_archive
   - run_application
   - collect_run_report

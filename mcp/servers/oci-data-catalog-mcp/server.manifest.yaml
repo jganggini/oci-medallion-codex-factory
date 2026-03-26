@@ -1,0 +1,14 @@
+name: oci-data-catalog-mcp
+runtime: python
+service: data-catalog
+mirror_output: workspace/oci-mirror/<env>/<compartment>/data_catalog/
+expected_tools:
+  - create_catalog
+  - create_private_endpoint
+  - create_data_asset
+  - create_connection
+  - create_harvest_job_definition
+  - run_harvest_job
+  - sync_di_lineage
+  - import_openlineage
+  - collect_lineage_report

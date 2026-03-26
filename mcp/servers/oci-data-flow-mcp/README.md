@@ -18,6 +18,7 @@ MCP operativo para empaquetar dependencias, registrar, actualizar y ejecutar apl
 - validar archive:
   `py -3 mcp/servers/oci-data-flow-mcp/server.py --environment dev --command validate-archive --application-name bronze-to-silver --dependency-root workspace/generated/sample-project/data_flow/dependencies/bronze-to-silver`
 - soporta `create-application`, `update-application` y `run-application`
+- soporta `collect-run-report` para persistir metricas y evidencia operacional por `run_id + slice_key`
 - acepta `--from-json-file` y `--archive-source-file` aun cuando los archivos vivan fuera del repo
 - soporta `--force`, multiples `--wait-for-state`, `--max-wait-seconds` y `--wait-interval-seconds`
 - soporta `--driver-shape-config-json` / `--executor-shape-config-json`
@@ -34,3 +35,5 @@ MCP operativo para empaquetar dependencias, registrar, actualizar y ejecutar apl
   `py -3 mcp/servers/oci-data-flow-mcp/server.py --environment dev --runtime oci --oci-mode plan --command update-application --application-name bronze-json-app --application-id ocid1.dataflowapplication... --from-json-file D:\ruta\application.json --force --wait-for-state ACTIVE`
 - ejecutar una aplicacion:
   `py -3 mcp/servers/oci-data-flow-mcp/server.py --environment dev --command run-application --application-name demo-app --parameter process_date=2026-03-25`
+- registrar el reporte operacional del run:
+  `py -3 mcp/servers/oci-data-flow-mcp/server.py --environment dev --command collect-run-report --application-name demo-app --run-id run-001 --slice-key entity=trafico/business_date=2026-03-25/batch_id=001 --rows-in 1000 --rows-out 995 --rows-rejected 5`

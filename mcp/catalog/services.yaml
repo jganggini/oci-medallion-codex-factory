@@ -24,7 +24,7 @@ servers:
 
   - name: oci-object-storage-mcp
     runtime: python
-    purpose: Buckets raw, trusted y refined
+    purpose: Buckets landing, bronze, silver y manifests operativos de Object Storage
     mirror_outputs:
       - workspace/oci-mirror/<env>/<compartment>/buckets/
     expected_tools:
@@ -45,19 +45,20 @@ servers:
 
   - name: oci-data-flow-mcp
     runtime: python
-    purpose: Apps, updates, runs, JSON externos, artefactos y evidencias de Data Flow
+    purpose: Apps, updates, runs, empaquetado, reportes y evidencias de Data Flow
     mirror_outputs:
       - workspace/oci-mirror/<env>/<compartment>/data_flow/
     expected_tools:
+      - package_dependencies
+      - validate_archive
       - create_application
       - update_application
-      - publish_archive
       - run_application
       - collect_run_report
 
   - name: oci-data-integration-mcp
     runtime: python
-    purpose: Workspaces, proyectos, folders, tasks, pipelines y task runs DI
+    purpose: Workspaces, proyectos, folders, tasks, pipelines y reportes de task runs DI
     mirror_outputs:
       - workspace/oci-mirror/<env>/<compartment>/data_integration/
     expected_tools:
@@ -70,25 +71,44 @@ servers:
 
   - name: oci-autonomous-database-mcp
     runtime: python
-    purpose: ADB, bootstrap, creacion de usuarios, ejecucion SQL con wallet y carga de objetos Gold
+    purpose: ADB, control plane medallion, creacion de usuarios, ejecucion SQL con wallet y carga de objetos Gold
     mirror_outputs:
       - workspace/oci-mirror/<env>/<compartment>/autonomous_database/
     expected_tools:
-      - create_autonomous_database
+      - create_adb_definition
+      - bootstrap_control_plane
       - bootstrap_schema
       - create_database_user
-      - apply_sql_bundle
-      - load_gold_objects
+      - apply_sql
+      - register_checkpoint
+      - create_reprocess_request
+      - load_gold_object
 
   - name: oci-data-quality-mcp
     runtime: python
-    purpose: Contratos de calidad, reconciliacion bucket vs ADB y gates de migracion
+    purpose: Contratos de calidad por run y slice, reconciliacion bucket vs ADB y gates de migracion
     mirror_outputs:
       - workspace/oci-mirror/<env>/<compartment>/quality/
     expected_tools:
       - profile_bucket_data
-      - run_quality_contract
+      - run_contract
       - gate_migration
+
+  - name: oci-data-catalog-mcp
+    runtime: python
+    purpose: Data Catalog, private endpoints, assets, harvests y publicacion de lineage OpenLineage
+    mirror_outputs:
+      - workspace/oci-mirror/<env>/<compartment>/data_catalog/
+    expected_tools:
+      - create_catalog
+      - create_private_endpoint
+      - create_data_asset
+      - create_connection
+      - create_harvest_job_definition
+      - run_harvest_job
+      - sync_di_lineage
+      - import_openlineage
+      - collect_lineage_report
 
   - name: oci-vault-mcp
     runtime: python

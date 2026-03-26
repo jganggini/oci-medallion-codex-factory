@@ -24,6 +24,8 @@ REQUIRED_ROOT_FILES = (
     "setup-dev.ps1",
     "setup-dev.sh",
     "templates/project.medallion.yaml",
+    "templates/autonomous/control_plane_bootstrap.sql",
+    "docs/medallion-control-plane.md",
 )
 REQUIRED_GITIGNORE_LINES = (
     ".local/",

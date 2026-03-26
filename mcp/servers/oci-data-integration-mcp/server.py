@@ -13,11 +13,19 @@ if str(REPO_ROOT_DEFAULT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT_DEFAULT))
 
 from mcp.common.local_services import (
+    collect_di_task_run_report,
     create_di_dataflow_task,
     create_di_folder,
     create_di_pipeline,
     create_di_project,
     create_di_workspace_metadata,
+)
+from mcp.common.medallion_runtime import (
+    add_standard_runtime_args,
+    build_openlineage_event,
+    queue_lineage_event,
+    record_control_runtime,
+    runtime_payload_from_args,
 )
 from mcp.common.oci_cli import OciExecutionContext, execute_oci
 from mcp.common.runtime import MirrorContext
@@ -97,7 +105,7 @@ def main() -> int:
     parser.add_argument(
         "--command",
         required=True,
-        choices=("create-workspace", "create-project", "create-folder", "create-task-from-dataflow", "create-pipeline"),
+        choices=("create-workspace", "create-project", "create-folder", "create-task-from-dataflow", "create-pipeline", "collect-task-run-report"),
     )
     parser.add_argument("--workspace-name", required=True)
     parser.add_argument("--compartment-id")
@@ -125,9 +133,18 @@ def main() -> int:
     parser.add_argument("--wait-for-state", action="append", default=[])
     parser.add_argument("--max-wait-seconds", type=int)
     parser.add_argument("--wait-interval-seconds", type=int)
+    parser.add_argument("--task-run-key")
+    parser.add_argument("--state", default="SUCCESS")
+    parser.add_argument("--bytes-read", type=int)
+    parser.add_argument("--bytes-written", type=int)
+    parser.add_argument("--rows-in", type=int)
+    parser.add_argument("--rows-out", type=int)
+    parser.add_argument("--rows-rejected", type=int)
+    add_standard_runtime_args(parser)
     args = parser.parse_args()
 
     context = MirrorContext(repo_root=Path(args.repo_root).resolve(), environment=args.environment)
+    runtime_payload = runtime_payload_from_args(args)
     registry_metadata = build_registry_metadata(args, default_aggregator_key="PROJECT" if args.command == "create-project" else None)
 
     if args.runtime == "oci":
@@ -171,7 +188,15 @@ def main() -> int:
                     "result_path": result.get("result_path"),
                 },
             )
-            print(json.dumps({"status": "ok", "runtime": "oci", "manifest_path": str(manifest)}, indent=2, ensure_ascii=True))
+            control_paths = record_control_runtime(
+                context,
+                runtime_payload,
+                "data_integration",
+                "create_workspace",
+                "applied" if args.oci_mode == "apply" else "planned",
+                extra={"workspace_name": args.workspace_name, "manifest_path": str(manifest)},
+            )
+            print(json.dumps({"status": "ok", "runtime": "oci", "manifest_path": str(manifest), "control_paths": control_paths}, indent=2, ensure_ascii=True))
             return 0
 
         if args.command == "create-project":
@@ -208,7 +233,15 @@ def main() -> int:
                     "result_path": result.get("result_path"),
                 },
             )
-            print(json.dumps({"status": "ok", "runtime": "oci", "project_manifest": str(project_manifest)}, indent=2, ensure_ascii=True))
+            control_paths = record_control_runtime(
+                context,
+                runtime_payload,
+                "data_integration",
+                "create_project",
+                "applied" if args.oci_mode == "apply" else "planned",
+                extra={"workspace_name": args.workspace_name, "project_manifest": str(project_manifest)},
+            )
+            print(json.dumps({"status": "ok", "runtime": "oci", "project_manifest": str(project_manifest), "control_paths": control_paths}, indent=2, ensure_ascii=True))
             return 0
 
         if args.command == "create-folder":
@@ -245,7 +278,15 @@ def main() -> int:
                     "result_path": result.get("result_path"),
                 },
             )
-            print(json.dumps({"status": "ok", "runtime": "oci", "folder_manifest": str(folder_manifest)}, indent=2, ensure_ascii=True))
+            control_paths = record_control_runtime(
+                context,
+                runtime_payload,
+                "data_integration",
+                "create_folder",
+                "applied" if args.oci_mode == "apply" else "planned",
+                extra={"workspace_name": args.workspace_name, "folder_manifest": str(folder_manifest)},
+            )
+            print(json.dumps({"status": "ok", "runtime": "oci", "folder_manifest": str(folder_manifest), "control_paths": control_paths}, indent=2, ensure_ascii=True))
             return 0
 
         if args.command == "create-task-from-dataflow":
@@ -293,7 +334,15 @@ def main() -> int:
                     "result_path": result.get("result_path"),
                 },
             )
-            print(json.dumps({"status": "ok", "runtime": "oci", "task_manifest": str(task_manifest)}, indent=2, ensure_ascii=True))
+            control_paths = record_control_runtime(
+                context,
+                runtime_payload,
+                "data_integration",
+                "create_task_from_dataflow",
+                "applied" if args.oci_mode == "apply" else "planned",
+                extra={"workspace_name": args.workspace_name, "task_manifest": str(task_manifest)},
+            )
+            print(json.dumps({"status": "ok", "runtime": "oci", "task_manifest": str(task_manifest), "control_paths": control_paths}, indent=2, ensure_ascii=True))
             return 0
 
     if args.command == "create-workspace":
@@ -310,7 +359,15 @@ def main() -> int:
                 "wait_interval_seconds": args.wait_interval_seconds,
             },
         )
-        print(json.dumps({"status": "ok", "manifest_path": str(result)}, indent=2, ensure_ascii=True))
+        control_paths = record_control_runtime(
+            context,
+            runtime_payload,
+            "data_integration",
+            "create_workspace",
+            "mirrored",
+            extra={"workspace_name": args.workspace_name, "manifest_path": str(result)},
+        )
+        print(json.dumps({"status": "ok", "manifest_path": str(result), "control_paths": control_paths}, indent=2, ensure_ascii=True))
         return 0
 
     if args.command == "create-project":
@@ -327,7 +384,15 @@ def main() -> int:
                 "registry_metadata": registry_metadata,
             },
         )
-        print(json.dumps({"status": "ok", "project_manifest": str(result)}, indent=2, ensure_ascii=True))
+        control_paths = record_control_runtime(
+            context,
+            runtime_payload,
+            "data_integration",
+            "create_project",
+            "mirrored",
+            extra={"workspace_name": args.workspace_name, "project_manifest": str(result)},
+        )
+        print(json.dumps({"status": "ok", "project_manifest": str(result), "control_paths": control_paths}, indent=2, ensure_ascii=True))
         return 0
 
     if args.command == "create-folder":
@@ -344,7 +409,15 @@ def main() -> int:
                 "registry_metadata": registry_metadata,
             },
         )
-        print(json.dumps({"status": "ok", "folder_manifest": str(result)}, indent=2, ensure_ascii=True))
+        control_paths = record_control_runtime(
+            context,
+            runtime_payload,
+            "data_integration",
+            "create_folder",
+            "mirrored",
+            extra={"workspace_name": args.workspace_name, "folder_manifest": str(result)},
+        )
+        print(json.dumps({"status": "ok", "folder_manifest": str(result), "control_paths": control_paths}, indent=2, ensure_ascii=True))
         return 0
 
     if args.command == "create-task-from-dataflow":
@@ -367,14 +440,94 @@ def main() -> int:
                 "application_compartment_id": args.application_compartment_id,
             },
         )
-        print(json.dumps({"status": "ok", "task_manifest": str(result)}, indent=2, ensure_ascii=True))
+        control_paths = record_control_runtime(
+            context,
+            runtime_payload,
+            "data_integration",
+            "create_task_from_dataflow",
+            "mirrored",
+            extra={"workspace_name": args.workspace_name, "task_manifest": str(result)},
+        )
+        print(json.dumps({"status": "ok", "task_manifest": str(result), "control_paths": control_paths}, indent=2, ensure_ascii=True))
+        return 0
+
+    if args.command == "collect-task-run-report":
+        metrics = {
+            "bytes_read": args.bytes_read,
+            "bytes_written": args.bytes_written,
+            "rows_in": args.rows_in,
+            "rows_out": args.rows_out,
+            "rows_rejected": args.rows_rejected,
+        }
+        result = collect_di_task_run_report(
+            context,
+            args.workspace_name,
+            args.task_name,
+            args.pipeline_name,
+            {
+                "task_run_key": args.task_run_key,
+                "state": args.state,
+                "service_run_ref": runtime_payload.get("service_run_ref"),
+                "workflow_id": runtime_payload.get("workflow_id"),
+                "run_id": runtime_payload.get("run_id"),
+                "slice_key": runtime_payload.get("slice_key"),
+                "metrics": metrics,
+            },
+        )
+        control_paths = record_control_runtime(
+            context,
+            runtime_payload,
+            "data_integration",
+            "collect_task_run_report",
+            args.state.lower(),
+            metrics=metrics,
+            extra={"workspace_name": args.workspace_name, "report_path": str(result), "task_run_key": args.task_run_key},
+        )
+        lineage_path = None
+        if runtime_payload.get("lineage_enabled") and runtime_payload.get("control_database_name"):
+            job_name = args.pipeline_name or args.task_name or args.workspace_name
+            lineage_payload = build_openlineage_event(
+                runtime_payload,
+                "COMPLETE" if args.state.upper() in ("SUCCESS", "SUCCEEDED") else "FAIL",
+                job_name,
+                inputs=[runtime_payload["source_asset_ref"]] if runtime_payload.get("source_asset_ref") else [],
+                outputs=[runtime_payload["target_asset_ref"]] if runtime_payload.get("target_asset_ref") else [],
+                event_facets={"dataIntegration": {"state": args.state, "metrics": metrics}},
+            )
+            lineage_path = queue_lineage_event(
+                context,
+                runtime_payload["control_database_name"],
+                runtime_payload,
+                "data_integration_task_run",
+                lineage_payload,
+            )
+        print(
+            json.dumps(
+                {
+                    "status": "ok",
+                    "report_path": str(result),
+                    "control_paths": control_paths,
+                    "lineage_outbox_path": str(lineage_path) if lineage_path else None,
+                },
+                indent=2,
+                ensure_ascii=True,
+            )
+        )
         return 0
 
     if not args.pipeline_name:
         raise SystemExit("--pipeline-name es requerido para create-pipeline")
 
     result = create_di_pipeline(context, args.workspace_name, args.pipeline_name, parse_list(args.task))
-    print(json.dumps({"status": "ok", "pipeline_manifest": str(result)}, indent=2, ensure_ascii=True))
+    control_paths = record_control_runtime(
+        context,
+        runtime_payload,
+        "data_integration",
+        "create_pipeline",
+        "mirrored",
+        extra={"workspace_name": args.workspace_name, "pipeline_manifest": str(result)},
+    )
+    print(json.dumps({"status": "ok", "pipeline_manifest": str(result), "control_paths": control_paths}, indent=2, ensure_ascii=True))
     return 0
 
 

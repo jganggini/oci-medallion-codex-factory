@@ -9,6 +9,7 @@ Esta carpeta contiene el catalogo y los manifests base de los MCPs del factory.
 - las salidas compartibles deben estar redacted
 - la ejecucion real puede usar OCI CLI, SDK o ambos, pero el contrato del espejo se mantiene estable
 - los MCPs de QA deben dejar evidencias comparables en `quality/` para gate de migracion
+- los MCPs operacionales deben poder recibir `workflow_id`, `run_id`, `slice_key` y publicar evidencia en el control plane cuando aplique
 
 ## Servidores
 

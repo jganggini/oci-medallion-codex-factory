@@ -14,6 +14,7 @@ MCP para crear workspaces, proyectos, folders, tasks Data Flow y pipelines DI en
 ## Capacidades
 
 - soporta `create-workspace`, `create-project`, `create-folder`, `create-task-from-dataflow` y `create-pipeline`
+- soporta `collect-task-run-report` para registrar TaskRuns y metricas operativas en el espejo local
 - permite `--description`, `--identifier`, `--aggregator-key`, `--folder-key`, `--registry-version`
 - permite `--parent-ref`, `--task-key`, `--application-compartment-id`
 - permite etiquetas y favorito con `--label` y `--favorite`
@@ -30,3 +31,5 @@ MCP para crear workspaces, proyectos, folders, tasks Data Flow y pipelines DI en
   `py -3 mcp/servers/oci-data-integration-mcp/server.py --environment dev --runtime oci --oci-mode plan --command create-task-from-dataflow --workspace-name ws-di-medallion-dev --workspace-id ocid1.disworkspace... --task-name "Run Bronze to Silver Trafico Datos" --application-id ocid1.dataflowapplication... --application-compartment-id ocid1.compartment... --aggregator-key <project_key> --task-key RUN_BRONZE_TO_SILVER_TRAFICO_DATOS_KEY`
 - crear pipeline:
   `py -3 mcp/servers/oci-data-integration-mcp/server.py --environment dev --command create-pipeline --workspace-name ws-di-medallion-dev --pipeline-name medallion-pipeline --task bronze-to-silver --task silver-to-gold`
+- registrar un TaskRun:
+  `py -3 mcp/servers/oci-data-integration-mcp/server.py --environment dev --command collect-task-run-report --workspace-name ws-di-medallion-dev --task-name bronze-to-silver --run-id run-001 --slice-key entity=trafico/business_date=2026-03-25/batch_id=001 --bytes-read 1000000 --bytes-written 980000`

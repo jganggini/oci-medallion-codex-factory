@@ -17,6 +17,7 @@ REPO_ROOT_DEFAULT = CURRENT_FILE.parents[3]
 if str(REPO_ROOT_DEFAULT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT_DEFAULT))
 
+from mcp.common.medallion_runtime import add_standard_runtime_args, record_control_runtime, register_quality_result, runtime_payload_from_args
 from mcp.common.runtime import MirrorContext, append_jsonl, ensure_directory, sanitize_name, utc_timestamp, write_json
 
 
@@ -562,6 +563,7 @@ def summarize_checks(checks: list[dict[str, Any]]) -> dict[str, Any]:
 
 def run_contract(args: argparse.Namespace) -> dict[str, Any]:
     context = MirrorContext(repo_root=Path(args.repo_root).resolve(), environment=args.environment)
+    runtime_payload = runtime_payload_from_args(args)
     repo_root = context.repo_root
     contract_path, contract = load_json_contract(repo_root, args.contract_file)
     contract_name = contract.get("contract_name") or contract_path.stem
@@ -629,6 +631,10 @@ def run_contract(args: argparse.Namespace) -> dict[str, Any]:
         "contract_path": str(contract_path),
         "dataset": contract.get("dataset"),
         "layer": contract.get("layer"),
+        "project_id": runtime_payload.get("project_id"),
+        "workflow_id": runtime_payload.get("workflow_id"),
+        "run_id": runtime_payload.get("run_id"),
+        "slice_key": runtime_payload.get("slice_key"),
         "runtime": args.runtime,
         "oci_mode": args.oci_mode,
         "created_at_utc": utc_timestamp(),
@@ -707,9 +713,11 @@ def main() -> int:
     parser.add_argument("--connect-user")
     parser.add_argument("--connect-password")
     parser.add_argument("--connect-password-env")
+    add_standard_runtime_args(parser)
     args = parser.parse_args()
 
     context = MirrorContext(repo_root=Path(args.repo_root).resolve(), environment=args.environment)
+    runtime_payload = runtime_payload_from_args(args)
 
     if args.command == "profile-bucket-data":
         if not args.bucket_name:
@@ -728,14 +736,69 @@ def main() -> int:
         profile_path = quality_root(context) / "profiles" / f"{utc_timestamp()}-{sanitize_name(args.target_name)}.json"
         write_json(profile_path, payload)
         quality_report(context, "profile-bucket-data", {"target_name": args.target_name, "profile_path": str(profile_path), "bucket_name": args.bucket_name})
-        print(json.dumps({"status": "ok", "profile_path": str(profile_path)}, indent=2, ensure_ascii=True))
+        control_paths = record_control_runtime(
+            context,
+            runtime_payload,
+            "quality",
+            "profile_bucket_data",
+            "mirrored",
+            metrics={"rows_in": payload["row_count"]},
+            extra={"profile_path": str(profile_path), "bucket_name": args.bucket_name, "target_name": args.target_name},
+        )
+        print(json.dumps({"status": "ok", "profile_path": str(profile_path), "control_paths": control_paths}, indent=2, ensure_ascii=True))
         return 0
 
     if args.command == "run-contract":
         if not args.contract_file:
             raise SystemExit("--contract-file es requerido para run-contract")
         result = run_contract(args)
-        print(json.dumps({"status": "ok", "result_path": str(result["result_path"]), "summary": result["payload"]["summary"]}, indent=2, ensure_ascii=True))
+        control_database_name = runtime_payload.get("control_database_name") or args.database_name or result["payload"].get("database_name")
+        quality_path = None
+        if control_database_name:
+            quality_path = register_quality_result(
+                context,
+                control_database_name,
+                runtime_payload,
+                result["payload"]["contract_name"],
+                result["payload"]["summary"]["overall_status"],
+                result["payload"]["summary"],
+                str(result["result_path"]),
+                extra={
+                    "layer": result["payload"].get("layer"),
+                    "severity_threshold": result["payload"].get("gate", {}).get("severity_threshold"),
+                },
+            )
+        control_paths = record_control_runtime(
+            context,
+            runtime_payload,
+            "quality",
+            "run_contract",
+            result["payload"]["summary"]["overall_status"],
+            database_name=control_database_name,
+            metrics={
+                "rows_in": result["payload"]["metrics"].get("bucket_row_count"),
+                "rows_out": result["payload"]["summary"]["total_checks"],
+                "rows_rejected": result["payload"]["summary"]["by_status"].get("failed", 0),
+            },
+            extra={
+                "result_path": str(result["result_path"]),
+                "quality_result_path": str(quality_path) if quality_path else None,
+                "contract_name": result["payload"]["contract_name"],
+            },
+        )
+        print(
+            json.dumps(
+                {
+                    "status": "ok",
+                    "result_path": str(result["result_path"]),
+                    "summary": result["payload"]["summary"],
+                    "quality_result_path": str(quality_path) if quality_path else None,
+                    "control_paths": control_paths,
+                },
+                indent=2,
+                ensure_ascii=True,
+            )
+        )
         return 0
 
     if not args.result_path:
@@ -756,7 +819,18 @@ def main() -> int:
     gate_path = root / "gate.json"
     write_json(gate_path, output)
     quality_report(context, "gate-migration", {"gate_name": gate_name, "gate_path": str(gate_path), "summary": gate_summary})
-    print(json.dumps({"status": "ok", "gate_path": str(gate_path), "summary": gate_summary}, indent=2, ensure_ascii=True))
+    control_database_name = runtime_payload.get("control_database_name") or result_payload.get("database_name") or args.database_name
+    control_paths = record_control_runtime(
+        context,
+        runtime_payload,
+        "quality",
+        "gate_migration",
+        gate_summary["status"].lower(),
+        database_name=control_database_name,
+        metrics={"rows_rejected": gate_summary["failed_at_threshold"]},
+        extra={"gate_path": str(gate_path), "gate_name": gate_name},
+    )
+    print(json.dumps({"status": "ok", "gate_path": str(gate_path), "summary": gate_summary, "control_paths": control_paths}, indent=2, ensure_ascii=True))
     return 0
 
 

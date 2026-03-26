@@ -15,9 +15,32 @@ sample_sources:
   - exports/
 
 target_layers:
-  bronze: true
-  silver: true
-  gold: true
+  landing_external: true
+  bronze_raw: true
+  silver_trusted: true
+  gold_refined: true
+  gold_adb: true
+
+existing_buckets:
+  - name: bucket-trafico-fuente
+    exists: true
+    layer: landing_external
+    managed_by_factory: false
+    ingestion_outside_flow: true
+  - name: bucket-trafico-bronze
+    exists: false
+    layer: bronze_raw
+    managed_by_factory: true
+    ingestion_outside_flow: false
+
+source_assets:
+  - name: trafico-landing-externo
+    type: object_storage
+    exists: true
+    layer: landing_external
+    uri: oci://bucket-trafico-fuente@namespace/source_system=trafico/
+    managed_by_factory: false
+    ingestion_outside_flow: true
 
 network_profile:
   compartment_strategy: by-environment
@@ -28,10 +51,42 @@ network_profile:
     data_flow: true
     data_integration: true
     autonomous: true
+    data_catalog: true
   nsgs:
     - nsg-data-flow
     - nsg-data-integration
     - nsg-autonomous
+    - nsg-data-catalog
+
+control_plane:
+  enabled: true
+  database_name: adb_trafico_gold
+  schema_name: MDL_CTL
+  control_user: MDL_CTL
+  source_type: object_storage
+  partition_pattern: source_system={source_system}/entity={entity}/business_date={business_date}/batch_id={batch_id}
+  default_reprocess_granularity: run+slice
+  technical_columns:
+    bronze:
+      - _source_system
+      - _source_uri
+      - _ingest_ts
+      - _workflow_id
+      - _run_id
+      - _slice_key
+    silver:
+      - _workflow_id
+      - _run_id
+      - _slice_key
+      - _source_uri
+      - _record_hash
+      - _ingest_ts
+      - _dq_status
+    gold:
+      - _published_run_id
+      - _valid_from
+      - _valid_to
+      - _is_current
 
 autonomous_profile:
   enabled: true
@@ -39,26 +94,66 @@ autonomous_profile:
   database_user: app_gold
   wallet_dir: .local/autonomous/wallets/dev/adb_trafico_gold
   load_strategy: single-writer-batch
+  cold_history_strategy: hybrid-partitioned
   publish_objects:
     - agg_resumen_archivos_trafico
 
 dataflow_jobs:
+  - name: landing_to_bronze_trafico_datos
+    enabled: true
+    layer_from: landing_external
+    layer_to: bronze_raw
   - name: bronze_to_silver_trafico_datos
     enabled: true
-    layer_from: bronze
-    layer_to: silver
+    layer_from: bronze_raw
+    layer_to: silver_trusted
   - name: silver_to_gold_agg_trafico_datos
     enabled: true
-    layer_from: silver
-    layer_to: gold
+    layer_from: silver_trusted
+    layer_to: gold_refined
   - name: gold_loader_agg_trafico_datos
     enabled: true
-    target: autonomous
+    target: gold_adb
 
 di_pipeline:
   enabled: true
   workspace_name: ws-di-medallion-dev
   application: trafico-datos-orchestrator
+  sync_lineage_with_data_catalog: true
+
+data_catalog:
+  enabled: true
+  catalog_name: dc-medallion-dev
+  private_endpoint_required: true
+  harvest_object_storage: true
+  harvest_autonomous_database: true
+  sync_data_integration: true
+
+lineage:
+  strategy: hybrid
+  native_sources:
+    - data_flow
+    - data_integration
+  custom_openlineage:
+    enabled: true
+    namespace: oci-medallion.dev.trafico-datos
+    provider_key: oci-medallion-codex-factory
+    publish_for:
+      - adb_sql
+      - dbms_cloud_load
+      - custom_transform
+      - reprocess_event
+
+reprocess:
+  enabled: true
+  default_scope: run+slice
+  supported_keys:
+    - entity
+    - business_date
+    - batch_id
+    - object_name
+  checkpoint_reuse: true
+  allow_row_level_repair: false
 
 quality_profile:
   enabled: true
@@ -66,6 +161,7 @@ quality_profile:
   sql_checks_root: workspace/migration-input/trafico-datos/quality/sql
   gate_before_cutover: true
   gate_severity_threshold: high
+  enforce_by_slice: true
 
 validation_rules:
   require_sql: true
@@ -73,8 +169,11 @@ validation_rules:
   require_samples_or_exports: true
   require_ddl: true
   require_mappings: true
+  require_control_plane: true
+  require_lineage_strategy: true
 
 approvals:
   provisioning_required: true
   publish_required: true
   ddl_required: true
+  lineage_required: true

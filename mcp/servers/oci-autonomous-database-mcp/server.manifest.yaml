@@ -3,8 +3,11 @@ runtime: python
 service: autonomous-database
 mirror_output: workspace/oci-mirror/<env>/<compartment>/autonomous_database/
 expected_tools:
-  - create_autonomous_database
+  - create_adb_definition
+  - bootstrap_control_plane
   - bootstrap_schema
   - create_database_user
-  - apply_sql_bundle
-  - load_gold_objects
+  - apply_sql
+  - register_checkpoint
+  - create_reprocess_request
+  - load_gold_object

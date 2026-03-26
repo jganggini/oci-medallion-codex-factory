@@ -5,7 +5,7 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
-from .runtime import MirrorContext, append_jsonl, copy_file, ensure_directory, sanitize_name, utc_timestamp, write_json
+from .runtime import MirrorContext, append_jsonl, copy_file, ensure_directory, read_json, sanitize_name, utc_timestamp, write_json
 
 
 def _record_operation(service_root: Path, context: MirrorContext, service_name: str, operation: str, payload: dict[str, Any]) -> None:
@@ -288,3 +288,179 @@ def register_adb_load(context: MirrorContext, adb_name: str, object_name: str, s
     write_json(receipt, payload)
     _record_operation(service_root, context, "autonomous_database", "load_gold_objects", payload)
     return receipt
+
+
+def collect_data_flow_run_report(context: MirrorContext, app_name: str, payload: dict[str, Any]) -> Path:
+    service_root = ensure_directory(context.service_root("data_flow") / sanitize_name(app_name))
+    reports_root = ensure_directory(service_root / "reports")
+    report_path = reports_root / f"{utc_timestamp()}-run-report.json"
+    report_payload = {
+        "application_name": app_name,
+        "created_at_utc": utc_timestamp(),
+        **payload,
+    }
+    write_json(report_path, report_payload)
+    _record_operation(service_root, context, "data_flow", "collect_run_report", report_payload)
+    return report_path
+
+
+def collect_di_task_run_report(
+    context: MirrorContext,
+    workspace_name: str,
+    task_name: str | None,
+    pipeline_name: str | None,
+    payload: dict[str, Any],
+) -> Path:
+    service_root = ensure_directory(context.service_root("data_integration") / sanitize_name(workspace_name))
+    reports_root = ensure_directory(service_root / "reports")
+    report_path = reports_root / f"{utc_timestamp()}-task-run-report.json"
+    report_payload = {
+        "workspace_name": workspace_name,
+        "task_name": task_name,
+        "pipeline_name": pipeline_name,
+        "created_at_utc": utc_timestamp(),
+        **payload,
+    }
+    write_json(report_path, report_payload)
+    _record_operation(service_root, context, "data_integration", "collect_task_run_report", report_payload)
+    return report_path
+
+
+def sync_bucket_manifest(context: MirrorContext, bucket_name: str, metadata: dict[str, Any]) -> Path:
+    bucket_root = context.bucket_root(bucket_name)
+    manifest_path = bucket_root / "bucket.manifest.json"
+    existing = read_json(manifest_path, default={})
+    payload = {
+        **existing,
+        "bucket_name": bucket_name,
+        "environment": context.environment,
+        "updated_at_utc": utc_timestamp(),
+        "metadata": {
+            **existing.get("metadata", {}),
+            **metadata,
+        },
+    }
+    if "created_at_utc" not in payload:
+        payload["created_at_utc"] = utc_timestamp()
+    write_json(manifest_path, payload)
+    _record_operation(bucket_root, context, "buckets", "sync_bucket_manifest", payload)
+    return manifest_path
+
+
+def create_data_catalog_manifest(context: MirrorContext, catalog_name: str, metadata: dict[str, Any]) -> Path:
+    service_root = ensure_directory(context.service_root("data_catalog"))
+    payload = {
+        "catalog_name": catalog_name,
+        "environment": context.environment,
+        "created_at_utc": utc_timestamp(),
+        "metadata": metadata,
+    }
+    manifest_path = service_root / "catalog.manifest.json"
+    write_json(manifest_path, payload)
+    _record_operation(service_root, context, "data_catalog", "create_catalog", payload)
+    return manifest_path
+
+
+def create_data_catalog_private_endpoint(context: MirrorContext, endpoint_name: str, metadata: dict[str, Any]) -> Path:
+    service_root = ensure_directory(context.service_root("data_catalog"))
+    path = ensure_directory(service_root / "private_endpoints") / f"{sanitize_name(endpoint_name)}.json"
+    payload = {
+        "private_endpoint_name": endpoint_name,
+        "created_at_utc": utc_timestamp(),
+        "metadata": metadata,
+    }
+    write_json(path, payload)
+    _record_operation(service_root, context, "data_catalog", "create_private_endpoint", payload)
+    return path
+
+
+def register_data_catalog_asset(context: MirrorContext, asset_name: str, metadata: dict[str, Any]) -> Path:
+    service_root = ensure_directory(context.service_root("data_catalog"))
+    path = ensure_directory(service_root / "assets") / f"{sanitize_name(asset_name)}.json"
+    payload = {
+        "asset_name": asset_name,
+        "created_at_utc": utc_timestamp(),
+        "metadata": metadata,
+    }
+    write_json(path, payload)
+    _record_operation(service_root, context, "data_catalog", "create_data_asset", payload)
+    return path
+
+
+def create_data_catalog_connection(context: MirrorContext, connection_name: str, metadata: dict[str, Any]) -> Path:
+    service_root = ensure_directory(context.service_root("data_catalog"))
+    path = ensure_directory(service_root / "connections") / f"{sanitize_name(connection_name)}.json"
+    payload = {
+        "connection_name": connection_name,
+        "created_at_utc": utc_timestamp(),
+        "metadata": metadata,
+    }
+    write_json(path, payload)
+    _record_operation(service_root, context, "data_catalog", "create_connection", payload)
+    return path
+
+
+def create_data_catalog_job_definition(context: MirrorContext, job_definition_name: str, metadata: dict[str, Any]) -> Path:
+    service_root = ensure_directory(context.service_root("data_catalog"))
+    path = ensure_directory(service_root / "job_definitions") / f"{sanitize_name(job_definition_name)}.json"
+    payload = {
+        "job_definition_name": job_definition_name,
+        "created_at_utc": utc_timestamp(),
+        "metadata": metadata,
+    }
+    write_json(path, payload)
+    _record_operation(service_root, context, "data_catalog", "create_harvest_job_definition", payload)
+    return path
+
+
+def run_data_catalog_job(context: MirrorContext, job_name: str, metadata: dict[str, Any]) -> Path:
+    service_root = ensure_directory(context.service_root("data_catalog"))
+    path = ensure_directory(service_root / "jobs") / f"{utc_timestamp()}-{sanitize_name(job_name)}.json"
+    payload = {
+        "job_name": job_name,
+        "created_at_utc": utc_timestamp(),
+        "metadata": metadata,
+    }
+    write_json(path, payload)
+    _record_operation(service_root, context, "data_catalog", "run_harvest_job", payload)
+    return path
+
+
+def sync_di_lineage(context: MirrorContext, workspace_name: str, metadata: dict[str, Any]) -> Path:
+    service_root = ensure_directory(context.service_root("data_catalog"))
+    path = ensure_directory(service_root / "lineage_syncs") / f"{utc_timestamp()}-{sanitize_name(workspace_name)}.json"
+    payload = {
+        "workspace_name": workspace_name,
+        "created_at_utc": utc_timestamp(),
+        "metadata": metadata,
+    }
+    write_json(path, payload)
+    _record_operation(service_root, context, "data_catalog", "sync_di_lineage", payload)
+    return path
+
+
+def import_openlineage_payload(context: MirrorContext, lineage_name: str, payload: dict[str, Any], metadata: dict[str, Any]) -> Path:
+    service_root = ensure_directory(context.service_root("data_catalog"))
+    path = ensure_directory(service_root / "lineage" / "imports") / f"{utc_timestamp()}-{sanitize_name(lineage_name)}.json"
+    body = {
+        "lineage_name": lineage_name,
+        "created_at_utc": utc_timestamp(),
+        "metadata": metadata,
+        "payload": payload,
+    }
+    write_json(path, body)
+    _record_operation(service_root, context, "data_catalog", "import_openlineage", body)
+    return path
+
+
+def collect_data_catalog_lineage_report(context: MirrorContext, report_name: str, metadata: dict[str, Any]) -> Path:
+    service_root = ensure_directory(context.service_root("data_catalog"))
+    path = ensure_directory(service_root / "lineage" / "reports") / f"{utc_timestamp()}-{sanitize_name(report_name)}.json"
+    payload = {
+        "report_name": report_name,
+        "created_at_utc": utc_timestamp(),
+        "metadata": metadata,
+    }
+    write_json(path, payload)
+    _record_operation(service_root, context, "data_catalog", "collect_lineage_report", payload)
+    return path

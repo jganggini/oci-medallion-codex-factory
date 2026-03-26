@@ -22,7 +22,7 @@
 9. Si quieres que Codex te guie paso a paso, abre `docs/codex-advisor.md` y empieza con `oci-medallion-advisor`.
 10. Ejecuta `python scripts/migration_intake.py --repo-root . --project-id <project_id>`.
 11. Revisa `workspace/migration-input/<project_id>/_inventory/inventory.md`.
-12. Ajusta `project.medallion.yaml`.
+12. Ajusta `project.medallion.yaml`, especialmente `existing_buckets`, `source_assets`, `control_plane`, `lineage` y `reprocess`.
 13. Ejecuta las skills en este orden:
     - `oci-medallion-advisor`
     - `oci-medallion-migration-intake`
@@ -42,4 +42,6 @@ Al terminar el onboarding, el repo debe tener:
 - `workspace/oci-mirror/` inicializado por ambiente
 - `workspace/migration-input/<project_id>/` listo para intake
 - inventario de insumos generado
-- base lista para crear foundation OCI y scaffold del proyecto
+- `project.medallion.yaml` con capas, buckets y assets correctamente descritos
+- bootstrap del control plane listo para ADB
+- base lista para crear foundation OCI, scaffold del proyecto y QA por slice

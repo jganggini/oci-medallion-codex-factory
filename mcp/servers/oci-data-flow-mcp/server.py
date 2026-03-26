@@ -13,7 +13,14 @@ if str(REPO_ROOT_DEFAULT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT_DEFAULT))
 
 from mcp.common.dataflow_packager import LEGACY_IMAGE, package_dependency_archive, validate_dependency_archive
-from mcp.common.local_services import run_data_flow_application, write_data_flow_application
+from mcp.common.local_services import collect_data_flow_run_report, run_data_flow_application, write_data_flow_application
+from mcp.common.medallion_runtime import (
+    add_standard_runtime_args,
+    build_openlineage_event,
+    queue_lineage_event,
+    record_control_runtime,
+    runtime_payload_from_args,
+)
 from mcp.common.oci_cli import OciExecutionContext, execute_oci
 from mcp.common.runtime import MirrorContext
 
@@ -223,7 +230,7 @@ def main() -> int:
     parser.add_argument(
         "--command",
         required=True,
-        choices=("package-dependencies", "validate-archive", "create-application", "update-application", "run-application"),
+        choices=("package-dependencies", "validate-archive", "create-application", "update-application", "run-application", "collect-run-report"),
     )
     parser.add_argument("--application-name", required=True)
     parser.add_argument("--source-dir")
@@ -259,9 +266,17 @@ def main() -> int:
     parser.add_argument("--wait-for-state", action="append", default=[])
     parser.add_argument("--max-wait-seconds", type=int)
     parser.add_argument("--wait-interval-seconds", type=int)
+    parser.add_argument("--state", default="SUCCEEDED")
+    parser.add_argument("--driver-log-uri")
+    parser.add_argument("--executor-log-uri")
+    parser.add_argument("--rows-in", type=int)
+    parser.add_argument("--rows-out", type=int)
+    parser.add_argument("--rows-rejected", type=int)
+    add_standard_runtime_args(parser)
     args = parser.parse_args()
 
     context = MirrorContext(repo_root=Path(args.repo_root).resolve(), environment=args.environment)
+    runtime_payload = runtime_payload_from_args(args)
     parameters = parse_parameters(args.parameter)
     packager_image = LEGACY_IMAGE if args.use_legacy_packager_image else args.packager_image
     dependency_root = ensure_optional_directory(args.dependency_root, "directorio de dependencias")
@@ -280,7 +295,15 @@ def main() -> int:
             image=packager_image,
             archive_name=args.archive_name,
         )
-        print(json.dumps({"status": "ok", "command": args.command, **result}, indent=2, ensure_ascii=True))
+        control_paths = record_control_runtime(
+            context,
+            runtime_payload,
+            "data_flow",
+            "package_dependencies",
+            "mirrored",
+            extra={"application_name": args.application_name, "archive_path": result["archive_path"]},
+        )
+        print(json.dumps({"status": "ok", "command": args.command, **result, "control_paths": control_paths}, indent=2, ensure_ascii=True))
         return 0
 
     if args.command == "validate-archive":
@@ -292,7 +315,15 @@ def main() -> int:
             image=packager_image,
             archive_name=args.archive_name,
         )
-        print(json.dumps({"status": "ok", "command": args.command, **result}, indent=2, ensure_ascii=True))
+        control_paths = record_control_runtime(
+            context,
+            runtime_payload,
+            "data_flow",
+            "validate_archive",
+            "mirrored",
+            extra={"application_name": args.application_name, "archive_path": result["archive_path"]},
+        )
+        print(json.dumps({"status": "ok", "command": args.command, **result, "control_paths": control_paths}, indent=2, ensure_ascii=True))
         return 0
 
     if args.command in ("create-application", "update-application"):
@@ -307,6 +338,20 @@ def main() -> int:
             mirrored = mirror_application(context, args, source_dir, from_json_file, archive_source_file, dependency_result)
             command = build_application_command(args, execution, from_json_file)
             result = execute_oci(execution, "data_flow", context, args.command, command, args.oci_mode)
+            control_paths = record_control_runtime(
+                context,
+                runtime_payload,
+                "data_flow",
+                args.command.replace("-", "_"),
+                "applied" if args.oci_mode == "apply" else "planned",
+                extra={
+                    "application_name": args.application_name,
+                    "manifest_path": str(mirrored["manifest_path"]) if mirrored["manifest_path"] else None,
+                    "archive_path": str(mirrored["archive_path"]) if mirrored["archive_path"] else None,
+                    "plan_path": result.get("plan_path"),
+                    "result_path": result.get("result_path"),
+                },
+            )
             print(
                 json.dumps(
                     {
@@ -320,6 +365,7 @@ def main() -> int:
                         "dependency_manifest_path": dependency_result["manifest_path"] if dependency_result else None,
                         "plan_path": result.get("plan_path"),
                         "result_path": result.get("result_path"),
+                        "control_paths": control_paths,
                     },
                     indent=2,
                     ensure_ascii=True,
@@ -328,6 +374,18 @@ def main() -> int:
             return 0
 
         mirrored = mirror_application(context, args, source_dir, from_json_file, archive_source_file, dependency_result)
+        control_paths = record_control_runtime(
+            context,
+            runtime_payload,
+            "data_flow",
+            args.command.replace("-", "_"),
+            "mirrored",
+            extra={
+                "application_name": args.application_name,
+                "manifest_path": str(mirrored["manifest_path"]) if mirrored["manifest_path"] else None,
+                "archive_path": str(mirrored["archive_path"]) if mirrored["archive_path"] else None,
+            },
+        )
         print(
             json.dumps(
                 {
@@ -338,6 +396,69 @@ def main() -> int:
                     "application_json_path": str(mirrored["application_json_path"]) if mirrored["application_json_path"] else None,
                     "dependency_archive_path": dependency_result["archive_path"] if dependency_result else None,
                     "dependency_manifest_path": dependency_result["manifest_path"] if dependency_result else None,
+                    "control_paths": control_paths,
+                },
+                indent=2,
+                ensure_ascii=True,
+            )
+        )
+        return 0
+
+    if args.command == "collect-run-report":
+        metrics = {
+            "rows_in": args.rows_in,
+            "rows_out": args.rows_out,
+            "rows_rejected": args.rows_rejected,
+        }
+        report = collect_data_flow_run_report(
+            context,
+            args.application_name,
+            {
+                "state": args.state,
+                "service_run_ref": runtime_payload.get("service_run_ref"),
+                "workflow_id": runtime_payload.get("workflow_id"),
+                "run_id": runtime_payload.get("run_id"),
+                "slice_key": runtime_payload.get("slice_key"),
+                "driver_log_uri": args.driver_log_uri,
+                "executor_log_uri": args.executor_log_uri,
+                "metrics": metrics,
+                "parameters": parameters,
+            },
+        )
+        control_paths = record_control_runtime(
+            context,
+            runtime_payload,
+            "data_flow",
+            "collect_run_report",
+            args.state.lower(),
+            metrics=metrics,
+            extra={"application_name": args.application_name, "report_path": str(report)},
+        )
+        lineage_path = None
+        if runtime_payload.get("lineage_enabled") and runtime_payload.get("control_database_name"):
+            lineage_payload = build_openlineage_event(
+                runtime_payload,
+                "COMPLETE" if args.state.upper() == "SUCCEEDED" else "FAIL",
+                args.application_name,
+                inputs=[runtime_payload["source_asset_ref"]] if runtime_payload.get("source_asset_ref") else [],
+                outputs=[runtime_payload["target_asset_ref"]] if runtime_payload.get("target_asset_ref") else [],
+                event_facets={"dataflow": {"state": args.state, "metrics": metrics}},
+            )
+            lineage_path = queue_lineage_event(
+                context,
+                runtime_payload["control_database_name"],
+                runtime_payload,
+                "data_flow_run",
+                lineage_payload,
+            )
+        print(
+            json.dumps(
+                {
+                    "status": "ok",
+                    "command": args.command,
+                    "report_path": str(report),
+                    "control_paths": control_paths,
+                    "lineage_outbox_path": str(lineage_path) if lineage_path else None,
                 },
                 indent=2,
                 ensure_ascii=True,
@@ -381,6 +502,19 @@ def main() -> int:
                 "wait_interval_seconds": args.wait_interval_seconds,
             },
         )
+        control_paths = record_control_runtime(
+            context,
+            runtime_payload,
+            "data_flow",
+            "run_application",
+            "applied" if args.oci_mode == "apply" else "planned",
+            extra={
+                "application_name": args.application_name,
+                "run_report": str(run_report),
+                "plan_path": result.get("plan_path"),
+                "result_path": result.get("result_path"),
+            },
+        )
         print(
             json.dumps(
                 {
@@ -390,6 +524,7 @@ def main() -> int:
                     "run_report": str(run_report),
                     "plan_path": result.get("plan_path"),
                     "result_path": result.get("result_path"),
+                    "control_paths": control_paths,
                 },
                 indent=2,
                 ensure_ascii=True,
@@ -407,7 +542,15 @@ def main() -> int:
             "wait_interval_seconds": args.wait_interval_seconds,
         },
     )
-    print(json.dumps({"status": "ok", "command": args.command, "run_report": str(run_report)}, indent=2, ensure_ascii=True))
+    control_paths = record_control_runtime(
+        context,
+        runtime_payload,
+        "data_flow",
+        "run_application",
+        "mirrored",
+        extra={"application_name": args.application_name, "run_report": str(run_report)},
+    )
+    print(json.dumps({"status": "ok", "command": args.command, "run_report": str(run_report), "control_paths": control_paths}, indent=2, ensure_ascii=True))
     return 0
 
 

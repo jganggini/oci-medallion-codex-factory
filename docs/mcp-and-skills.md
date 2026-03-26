@@ -11,14 +11,17 @@ El factory define estos MCPs:
 - `oci-data-flow-mcp`
 - `oci-data-integration-mcp`
 - `oci-autonomous-database-mcp`
+- `oci-data-catalog-mcp`
+- `oci-data-quality-mcp`
 - `oci-vault-mcp`
 - `migration-intake-mcp`
 
 Cada MCP debe:
 
-- operar sobre OCI
+- operar sobre OCI o sobre el espejo local
 - producir manifests o reportes redacted
 - actualizar `workspace/oci-mirror/`
+- aceptar `workflow_id`, `run_id`, `slice_key` y metadatos operacionales cuando aplique
 
 ## Skills
 

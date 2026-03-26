@@ -4,6 +4,8 @@ Este directorio contiene plantillas reutilizables para nuevos proyectos medallio
 
 - `project.medallion.yaml`
   Manifiesto base del proyecto.
+- `autonomous/control_plane_bootstrap.sql`
+  Bootstrap base del schema `MDL_CTL`.
 - `data_flow/minimal_app/`
   App minima para Data Flow.
 - `data_flow/dependency_package/`

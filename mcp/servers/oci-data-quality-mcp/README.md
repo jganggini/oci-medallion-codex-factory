@@ -1,6 +1,6 @@
 # oci-data-quality-mcp
 
-MCP para QA de datos migrados en buckets y Autonomous Database usando contratos por dataset.
+MCP para QA de datos migrados en buckets y Autonomous Database usando contratos por dataset y evidencia por `run_id + slice_key`.
 
 ## Modos
 
@@ -37,3 +37,5 @@ MCP para QA de datos migrados en buckets y Autonomous Database usando contratos 
   `workspace/migration-input/<project_id>/quality/sql/`
 - evidencias:
   `workspace/oci-mirror/<env>/<compartment>/quality/`
+- control plane operativo:
+  `workspace/oci-mirror/<env>/<compartment>/autonomous_database/<adb>/control_plane/`

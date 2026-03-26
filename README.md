@@ -1,10 +1,10 @@
 # oci-medallion-codex-factory
 
-Base reusable para construir proyectos medallion en OCI con Codex, MCPs por servicio, Terraform compatible con OCI Resource Manager y un espejo local de OCI alineado con ambientes, compartments y servicios.
+Base reusable para construir proyectos medallion en OCI con Codex, MCPs por servicio, Terraform compatible con OCI Resource Manager, control plane operacional en Autonomous Database y un espejo local de OCI alineado con ambientes, compartments y servicios.
 
 ## Objetivo
 
-Este repo permite que un equipo tome SQL heredado, documentos funcionales, DDL, muestras de datos y exports historicos para generar un proyecto medallion en OCI sin improvisar rutas, carpetas ni contratos entre desarrollo, publicacion y operacion.
+Este repo permite que un equipo tome SQL heredado, documentos funcionales, DDL, muestras de datos y exports historicos para generar un proyecto medallion en OCI sin improvisar rutas, carpetas, contratos ni mecanismos de control de ejecucion, lineage y reproceso.
 
 ## Zonas locales
 
@@ -20,11 +20,11 @@ Este repo permite que un equipo tome SQL heredado, documentos funcionales, DDL, 
 - `infra/`
   Modulos Terraform y stacks base por ambiente.
 - `mcp/`
-  Catalogo, contratos y manifests de MCPs por servicio OCI.
+  Catalogo, contratos y manifests base de los MCPs por servicio OCI.
 - `skills/`
-  Workflows de Codex para asesor guiado, bootstrap, intake, scaffold, publicacion y validacion.
+  Workflows de Codex para asesor guiado, bootstrap, intake, scaffold, publicacion, QA y validacion.
 - `templates/`
-  Plantillas base de manifiestos y esqueletos de proyecto.
+  Plantillas base de manifiestos, SQL del control plane y esqueletos de proyecto.
 - `examples/`
   Ejemplos de proyectos medallion.
 - `docker/`
@@ -41,12 +41,14 @@ Este repo permite que un equipo tome SQL heredado, documentos funcionales, DDL, 
 3. Coloca tus insumos del proyecto en `workspace/migration-input/<project_id>/`.
 4. Si necesitas mantener copias privadas, usa `.local/migration-private/<project_id>/`.
 5. Completa tu configuracion OCI local en `.local/oci/`.
-6. Levanta Docker con `docker compose up -d`.
-7. Abre el repo con Codex App desde Cursor o VS Code.
-8. Si quieres que Codex te guie paso a paso, empieza con `docs/codex-advisor.md` y la skill `oci-medallion-advisor`.
-9. Ejecuta el intake con `python scripts/migration_intake.py --repo-root . --project-id <project_id>`.
-10. Usa las skills `oci-medallion-advisor`, `oci-medallion-migration-intake`, `oci-medallion-bootstrap` y `oci-medallion-scaffold`.
-11. Si Terraform o un recurso OCI no estan claros durante el despliegue, usa `oci-terraform-fallback` como referencia oficial antes de cambiar `infra/` o un MCP.
+6. Coloca wallets en `.local/autonomous/wallets/<env>/<adb_name>/`.
+7. Levanta Docker con `docker compose up -d`.
+8. Abre el repo con Codex App desde Cursor o VS Code.
+9. Si quieres que Codex te guie paso a paso, empieza con `docs/codex-advisor.md` y la skill `oci-medallion-advisor`.
+10. Ejecuta el intake con `python scripts/migration_intake.py --repo-root . --project-id <project_id>`.
+11. Ajusta `project.medallion.yaml`.
+12. Usa las skills `oci-medallion-advisor`, `oci-medallion-migration-intake`, `oci-medallion-bootstrap`, `oci-medallion-scaffold`, `oci-medallion-publish`, `oci-medallion-qa` y `oci-medallion-validate`.
+13. Si Terraform o un recurso OCI no estan claros durante el despliegue, usa `oci-terraform-fallback` como referencia oficial antes de cambiar `infra/` o un MCP.
 
 ## Prompt recomendado para clientes
 
@@ -62,19 +64,20 @@ Trabaja asi:
 1. inspecciona el repo y detecta la etapa actual
 2. hazme preguntas una por una
 3. si falta un archivo, dime exactamente en que ruta debe ir y que contenido minimo esperas
-4. pregunta tambien si ya existe algun bucket con informacion, a que capa pertenece y si la carga se hara por fuera de este flujo
-5. no asumas credenciales, wallets, OCIDs ni tfvars
-6. antes de ejecutar cambios, resume el plan por etapas
-7. guiame hasta dejar el proyecto listo para desplegar y migrar
+4. pregunta si ya existe algun bucket o source asset con informacion, a que capa pertenece y si la carga se hara por fuera de este flujo
+5. no asumas que un bucket con datos significa que ya existen todas las capas landing, bronze, silver, refined o gold
+6. no asumas credenciales, wallets, OCIDs ni tfvars
+7. antes de ejecutar cambios, resume el plan por etapas
+8. guiame hasta dejar el proyecto listo para desplegar, migrar, validar y reprocesar por slice
 ```
 
 Con ese prompt, Codex deberia ayudarte a:
 
 - identificar en que etapa del despliegue o migracion estas
 - decirte donde colocar los archivos del proyecto
-- preguntar si ya existe algun bucket con informacion y si corresponde solo a fuente, raw, trusted, refined o gold
+- preguntar si ya existe algun bucket o asset con informacion y si corresponde a `landing_external`, `bronze_raw`, `silver_trusted`, `gold_refined` o `gold_adb`
 - no asumir que tener un bucket con datos implica que toda la arquitectura medallion ya esta creada
-- decidir si corresponde intake, scaffold, publish, QA o validacion
+- decidir si corresponde intake, scaffold, publish, lineage, QA o validacion
 
 ## Contratos clave
 
@@ -82,12 +85,14 @@ Con ese prompt, Codex deberia ayudarte a:
 - Raiz de insumos: `workspace/migration-input/<project_id>/`
 - Espejo local OCI: `workspace/oci-mirror/<env>/compartment-data-medallion-<env>/<service>/`
 - Configuracion sensible: `.local/...`
+- Control plane bootstrap: `templates/autonomous/control_plane_bootstrap.sql`
 
 ## Documentacion recomendada
 
 - [ARCHITECTURE.md](ARCHITECTURE.md)
 - [docs/onboarding.md](docs/onboarding.md)
 - [docs/codex-advisor.md](docs/codex-advisor.md)
+- [docs/medallion-control-plane.md](docs/medallion-control-plane.md)
 - [docs/local-zones.md](docs/local-zones.md)
 - [docs/project-contract.md](docs/project-contract.md)
 - [docs/oci-mirror.md](docs/oci-mirror.md)
@@ -105,7 +110,9 @@ El repo prepara la base para:
 - crear foundation OCI por ambiente
 - intake de insumos de migracion
 - scaffold de proyectos medallion
-- publicacion de artefactos a Data Flow, Data Integration y Autonomous Database
+- publicacion de artefactos a Object Storage, Data Flow, Data Integration, Autonomous Database y Data Catalog
+- control centralizado de runs, slices, checkpoints, reprocesos y QA
+- publicacion de lineage nativo y custom
 - validacion de contratos y estructura local
 
 No incluye secretos reales, wallets reales, OCIDs reales ni reportes con identificadores sensibles.

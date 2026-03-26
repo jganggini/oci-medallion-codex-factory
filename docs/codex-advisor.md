@@ -9,7 +9,8 @@ La idea no es solo ejecutar scripts. La idea es que Codex:
 - descubra en que etapa esta el proyecto
 - te diga que insumos faltan
 - te indique exactamente donde colocar cada archivo
-- te lleve paso a paso por intake, bootstrap, publicacion, QA y validacion
+- diferencie buckets existentes de capas realmente implementadas
+- te lleve paso a paso por intake, bootstrap, publicacion, lineage, QA, validacion y reprocesos parciales
 
 ## Como pedirselo a Codex
 
@@ -25,10 +26,11 @@ Trabaja asi:
 1. inspecciona el repo y detecta la etapa actual
 2. hazme preguntas una por una
 3. si falta un archivo, dime exactamente en que ruta debe ir y que contenido minimo esperas
-4. pregunta si ya existe algun bucket con informacion, a que capa pertenece y si la carga se hara aparte
-5. no asumas credenciales, wallets, OCIDs ni tfvars
-6. antes de ejecutar cambios, resume el plan por etapas
-7. guiame hasta dejar el proyecto listo para desplegar y migrar
+4. pregunta si ya existe algun bucket o source asset con informacion, a que capa pertenece y si la carga se hara aparte
+5. no asumas que un bucket con datos significa que ya existen todas las capas
+6. no asumas credenciales, wallets, OCIDs ni tfvars
+7. antes de ejecutar cambios, resume el plan por etapas
+8. guiame hasta dejar el proyecto listo para desplegar, migrar, validar y reprocesar por slice
 ```
 
 ## Modo recomendado
@@ -60,6 +62,6 @@ Cuando el flujo funciona bien, Codex deberia responder en este orden:
 
 ## Cuando pedir plan y cuando pedir ejecucion
 
-- pide guia o plan cuando aun no sabes que archivos faltan o donde van
+- pide guia o plan cuando aun no sabes que archivos faltan, donde van o como clasificar buckets y assets existentes
 - pide ejecucion cuando ya validaste el plan y quieres que Codex avance en el repo
-- pide `oci apply` solo cuando ya confirmaste credenciales, ambiente y recursos objetivo
+- pide `oci apply` solo cuando ya confirmaste credenciales, ambiente, control plane y recursos objetivo
