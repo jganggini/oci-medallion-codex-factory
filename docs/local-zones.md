@@ -54,3 +54,5 @@ Si durante la entrevista el usuario dice que luego entregara archivos, el plan d
 - ruta fuente exacta donde hoy estan los archivos
 - ruta destino exacta dentro de `workspace/migration-input/<project_id>/...`
 - tipo de insumo: `sql`, `scripts`, `data`, `references`, `samples` o `exports`
+
+Si los archivos todavia estan fuera del repo, usa `py -3 scripts/stage_local_assets.py --repo-root . --project-id <project_id> ...` para copiarlos automaticamente a `workspace/migration-input/<project_id>/`, `.local/oci/` o `.local/autonomous/wallets/<env>/<adb_name>/`.

@@ -10,6 +10,7 @@ La idea no es solo ejecutar scripts. La idea es que Codex:
 - te diga que insumos faltan
 - te indique exactamente donde colocar cada archivo
 - te pida SQL, scripts heredados, data y documentacion de referencia desde la entrevista inicial
+- te pida la ruta exacta de `config`, `.pem` y wallet cuando el despliegue lo requiera
 - diferencie buckets existentes de capas realmente implementadas
 - asuma por defecto una ruta completa `landing_external -> bronze_raw -> silver_trusted -> gold_refined -> gold_adb`
 - te lleve paso a paso por intake, bootstrap, publicacion, lineage, QA, validacion y reprocesos parciales
@@ -29,15 +30,17 @@ Trabaja asi:
 2. hazme preguntas una por una
 3. si falta un archivo, dime exactamente en que ruta debe ir y que contenido minimo esperas
 4. pregunta explicitamente por SQL, scripts heredados, data o csv/parquet y documentacion de referencia
-5. si te digo que luego te pasare archivos, exigeme la ruta exacta donde estan hoy y la ruta destino dentro de workspace/migration-input/<project_id>/
-6. asume por defecto un despliegue end-to-end hasta Autonomous Database, con entrega final en gold_adb
-7. solo pregunta por un alcance parcial si yo lo pido de forma explicita
-8. pregunta si ya existe algun bucket o source asset con informacion, a que capa pertenece y si la carga se hara aparte
-9. no asumas que un bucket con datos significa que ya existen todas las capas
-10. no asumas credenciales, wallets, OCIDs ni tfvars
-11. antes de ejecutar cambios, resume el plan por etapas
-12. cuando cierres las preguntas y el plan inicial, levanta Docker con docker compose up -d antes de intake, bootstrap o publish
-13. guiame hasta dejar el proyecto listo para desplegar, migrar, validar y reprocesar por slice
+5. pide tambien la ruta exacta del OCI config, de la llave .pem y del wallet si aplica
+6. si te digo que luego te pasare archivos, exigeme la ruta exacta donde estan hoy y la ruta destino dentro de workspace/migration-input/<project_id>/ o .local/oci/ o .local/autonomous/wallets/<env>/<adb_name>/
+7. despues del plan inicial, ejecuta el staging automatico para copiar los archivos a su ruta correcta antes del intake
+8. asume por defecto un despliegue end-to-end hasta Autonomous Database, con entrega final en gold_adb
+9. solo pregunta por un alcance parcial si yo lo pido de forma explicita
+10. pregunta si ya existe algun bucket o source asset con informacion, a que capa pertenece y si la carga se hara aparte
+11. no asumas que un bucket con datos significa que ya existen todas las capas
+12. no asumas credenciales, wallets, OCIDs ni tfvars
+13. antes de ejecutar cambios, resume el plan por etapas
+14. cuando cierres las preguntas, el plan inicial y el staging, levanta Docker con docker compose up -d antes de intake, bootstrap o publish
+15. guiame hasta dejar el proyecto listo para desplegar, migrar, validar y reprocesar por slice
 ```
 
 ## Modo recomendado
@@ -53,24 +56,26 @@ Cuando el flujo funciona bien, Codex deberia responder en este orden:
 1. etapa actual
 2. confirmar que la ruta objetivo por defecto llega hasta `gold_adb`, salvo restriccion explicita
 3. pedir SQL, scripts, data y documentacion de referencia faltante
-4. si un insumo aun no fue copiado, pedir ruta fuente exacta y ruta destino exacta
-5. ruta exacta dentro de `workspace/migration-input/<project_id>/` donde debes colocar el insumo
+4. pedir la ruta exacta de `config`, `.pem` y wallet cuando hagan falta
+5. si un insumo aun no fue copiado, pedir ruta fuente exacta y ruta destino exacta
 6. plan inicial por etapas
-7. levantar Docker temprano antes de intake o bootstrap si todavia no esta arriba
-8. siguiente accion que hara cuando confirmes
+7. ejecutar staging automatico antes del intake
+8. levantar Docker temprano antes de intake o bootstrap si todavia no esta arriba
+9. siguiente accion que hara cuando confirmes
 
 ## Secuencia sugerida
 
 1. `oci-medallion-advisor`
-2. `docker compose up -d` cuando termine discovery y el plan inicial
-3. `oci-medallion-migration-intake`
-4. `oci-medallion-bootstrap`
-5. `oci-medallion-network-foundation`
-6. `oci-medallion-scaffold`
-7. `oci-medallion-publish`
-8. `oci-medallion-qa`
-9. `oci-terraform-fallback` si algun recurso OCI o Terraform no esta claro
-10. `oci-medallion-validate`
+2. `py -3 scripts/stage_local_assets.py ...` cuando los insumos o credenciales aun estan fuera del repo
+3. `docker compose up -d` cuando termine discovery, el plan inicial y el staging
+4. `oci-medallion-migration-intake`
+5. `oci-medallion-bootstrap`
+6. `oci-medallion-network-foundation`
+7. `oci-medallion-scaffold`
+8. `oci-medallion-publish`
+9. `oci-medallion-qa`
+10. `oci-terraform-fallback` si algun recurso OCI o Terraform no esta claro
+11. `oci-medallion-validate`
 
 ## Cuando pedir plan y cuando pedir ejecucion
 

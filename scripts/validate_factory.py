@@ -23,6 +23,7 @@ REQUIRED_ROOT_FILES = (
     ".gitignore",
     "setup-dev.ps1",
     "setup-dev.sh",
+    "scripts/stage_local_assets.py",
     "templates/project.medallion.yaml",
     "templates/autonomous/control_plane_bootstrap.sql",
     "docs/medallion-control-plane.md",

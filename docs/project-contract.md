@@ -53,6 +53,7 @@ Cada proyecto medallion debe definir un `project.medallion.yaml`.
 - Si `data_catalog.enabled` es `true`, el manifiesto debe aclarar si se cosechara Object Storage, Autonomous y DI.
 - `reprocess.default_scope` debe ser `run+slice` salvo que el proyecto justifique otra estrategia.
 - `quality_profile` debe apuntar a contratos y SQL de QA por dataset cuando el proyecto requiera gate de migracion.
+- `config`, `.pem` y wallets siguen fuera del manifiesto, pero deben stagearse a `.local/` antes de bootstrap o publish.
 
 ## Flujo
 
