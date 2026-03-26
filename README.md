@@ -62,7 +62,7 @@ Trabaja asi:
 1. inspecciona el repo y detecta la etapa actual
 2. hazme preguntas una por una
 3. si falta un archivo, dime exactamente en que ruta debe ir y que contenido minimo esperas
-4. pregunta tambien si ya existe el bucket con los archivos o si la carga se hara por fuera de este flujo
+4. pregunta tambien si ya existe algun bucket con informacion, a que capa pertenece y si la carga se hara por fuera de este flujo
 5. no asumas credenciales, wallets, OCIDs ni tfvars
 6. antes de ejecutar cambios, resume el plan por etapas
 7. guiame hasta dejar el proyecto listo para desplegar y migrar
@@ -72,7 +72,8 @@ Con ese prompt, Codex deberia ayudarte a:
 
 - identificar en que etapa del despliegue o migracion estas
 - decirte donde colocar los archivos del proyecto
-- preguntar si los buckets ya existen o si la carga de archivos se realiza aparte
+- preguntar si ya existe algun bucket con informacion y si corresponde solo a fuente, raw, trusted, refined o gold
+- no asumir que tener un bucket con datos implica que toda la arquitectura medallion ya esta creada
 - decidir si corresponde intake, scaffold, publish, QA o validacion
 
 ## Contratos clave

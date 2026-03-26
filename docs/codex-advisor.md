@@ -25,7 +25,7 @@ Trabaja asi:
 1. inspecciona el repo y detecta la etapa actual
 2. hazme preguntas una por una
 3. si falta un archivo, dime exactamente en que ruta debe ir y que contenido minimo esperas
-4. pregunta si ya existe el bucket con los archivos o si la carga se hara aparte
+4. pregunta si ya existe algun bucket con informacion, a que capa pertenece y si la carga se hara aparte
 5. no asumas credenciales, wallets, OCIDs ni tfvars
 6. antes de ejecutar cambios, resume el plan por etapas
 7. guiame hasta dejar el proyecto listo para desplegar y migrar

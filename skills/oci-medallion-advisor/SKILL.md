@@ -25,9 +25,10 @@ Usa esta skill para convertir una solicitud abierta en un plan operable, guiado 
    - archivo o carpeta esperada
    - si es obligatorio u opcional
    - contenido minimo esperado
-5. preguntar explicitamente si el bucket con los archivos ya existe o si la carga de archivos se hara por fuera de este flujo
-6. no pasar a `oci-mode apply` hasta confirmar credenciales locales, ambiente objetivo, region, OCIDs y wallets si aplican
-7. derivar al siguiente skill segun la etapa:
+5. preguntar explicitamente si ya existe algun bucket con informacion, a que capa pertenece y si la carga de archivos se hara por fuera de este flujo
+6. no asumir que un bucket poblado significa que ya existen todas las capas raw, trusted, refined y gold
+7. no pasar a `oci-mode apply` hasta confirmar credenciales locales, ambiente objetivo, region, OCIDs y wallets si aplican
+8. derivar al siguiente skill segun la etapa:
    - `oci-medallion-migration-intake`
    - `oci-medallion-bootstrap`
    - `oci-medallion-network-foundation`
@@ -37,7 +38,7 @@ Usa esta skill para convertir una solicitud abierta en un plan operable, guiado 
    - `oci-terraform-fallback`
    - `oci-medallion-validate`
    - `oci-medallion-incident`
-8. cerrar cada etapa con:
+9. cerrar cada etapa con:
    - que quedo listo
    - que falta
    - siguiente paso concreto
@@ -49,7 +50,8 @@ Hazlas de una en una y solo si son necesarias:
 - cual es el `project_id`
 - si el usuario ya tiene insumos en `workspace/migration-input/<project_id>/`
 - si trabajara en `dev`, `qa` o `prod`
-- si ya existe el bucket con los archivos fuente o Gold
+- si ya existe algun bucket con datos
+- a que capa corresponde cada bucket existente: fuente, raw, trusted, refined o gold
 - si la carga de archivos al bucket se hara dentro del factory o por un proceso externo
 - si quiere solo simulacion local/plan o tambien despliegue real
 - si ya cuenta con `.local/oci/config`, llaves y wallets
