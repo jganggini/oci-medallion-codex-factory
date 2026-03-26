@@ -29,7 +29,7 @@ Trabaja asi:
 2. hazme preguntas una por una
 3. si falta un archivo, dime exactamente en que ruta debe ir y que contenido minimo esperas
 4. pregunta explicitamente por SQL, scripts heredados, data o csv/parquet y documentacion de referencia
-5. si te digo que luego te pasare archivos, exigeme la ruta exacta donde estan hoy y la ruta destino dentro de workspace/migration-input/<project_id>/ o .local/migration-private/<project_id>/
+5. si te digo que luego te pasare archivos, exigeme la ruta exacta donde estan hoy y la ruta destino dentro de workspace/migration-input/<project_id>/
 6. asume por defecto un despliegue end-to-end hasta Autonomous Database, con entrega final en gold_adb
 7. solo pregunta por un alcance parcial si yo lo pido de forma explicita
 8. pregunta si ya existe algun bucket o source asset con informacion, a que capa pertenece y si la carga se hara aparte
@@ -54,7 +54,7 @@ Cuando el flujo funciona bien, Codex deberia responder en este orden:
 2. confirmar que la ruta objetivo por defecto llega hasta `gold_adb`, salvo restriccion explicita
 3. pedir SQL, scripts, data y documentacion de referencia faltante
 4. si un insumo aun no fue copiado, pedir ruta fuente exacta y ruta destino exacta
-5. ruta exacta donde debes colocar el insumo
+5. ruta exacta dentro de `workspace/migration-input/<project_id>/` donde debes colocar el insumo
 6. plan inicial por etapas
 7. levantar Docker temprano antes de intake o bootstrap si todavia no esta arriba
 8. siguiente accion que hara cuando confirmes

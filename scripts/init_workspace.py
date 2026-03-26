@@ -17,7 +17,7 @@ SERVICES = (
     "reports",
 )
 LAYER_BUCKETS = ("bucket-raw", "bucket-trusted", "bucket-refined")
-MIGRATION_FOLDERS = ("sql", "docs", "ddl", "samples", "exports", "mappings", "notes")
+MIGRATION_FOLDERS = ("sql", "scripts", "data", "docs", "references", "ddl", "samples", "exports", "mappings", "notes")
 
 
 def ensure_file(path: Path, content: str = "") -> None:
@@ -42,7 +42,6 @@ def init_local(repo_root: Path, project_id: str) -> None:
                 "- `oci/`: config, keys y perfiles OCI",
                 "- `autonomous/wallets/`: wallets por ambiente y base",
                 "- `secrets/`: archivos `.env` locales",
-                "- `migration-private/`: landing zone privada opcional para insumos de migracion sensibles",
             ]
         ),
     )
@@ -75,21 +74,6 @@ def init_local(repo_root: Path, project_id: str) -> None:
             )
             + "\n",
         )
-
-    private_root = repo_root / ".local" / "migration-private" / project_id
-    for folder in MIGRATION_FOLDERS:
-        ensure_file(private_root / folder / ".gitkeep")
-    ensure_file(
-        private_root / "README.md",
-        "\n".join(
-            [
-                f"# Private Migration Input - {project_id}",
-                "",
-                "Usa esta zona solo para material sensible que no deba quedar en Git.",
-                "El intake canonico trabaja sobre `workspace/migration-input/<project_id>/`.",
-            ]
-        ),
-    )
 
 
 def init_mirror(repo_root: Path) -> None:
@@ -151,7 +135,10 @@ def init_migration_input(repo_root: Path, project_id: str) -> None:
                 "",
                 "Coloca aqui los insumos base para la migracion:",
                 "- `sql/`: procedimientos, queries, paquetes SQL",
+                "- `scripts/`: wrappers, jobs y scripts heredados",
+                "- `data/`: payload fuente, CSV, Parquet y archivos base",
                 "- `docs/`: documentos funcionales, reglas de negocio y analisis",
+                "- `references/`: layouts, manuales y documentacion de referencia",
                 "- `ddl/`: DDL y diccionario de datos",
                 "- `samples/`: archivos raw o muestras",
                 "- `exports/`: salidas esperadas o historicas",

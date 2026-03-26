@@ -13,7 +13,7 @@ Este repo permite que un equipo tome SQL heredado, documentos funcionales, DDL, 
 - `workspace/oci-mirror/`
   Espejo local del estado publicado en OCI por ambiente y servicio.
 - `.local/`
-  Configuracion sensible y artefactos no versionados, incluyendo perfiles OCI, wallets y una zona opcional `migration-private/` para material fuente que no deba quedar en Git.
+  Configuracion sensible y artefactos no versionados, incluyendo perfiles OCI, wallets y secretos locales.
 
 ## Estructura
 
@@ -39,16 +39,15 @@ Este repo permite que un equipo tome SQL heredado, documentos funcionales, DDL, 
 1. Clona el repo.
 2. Ejecuta `setup-dev.ps1` o `setup-dev.sh`.
 3. Coloca tus insumos del proyecto en `workspace/migration-input/<project_id>/`, incluyendo SQL, scripts, data y documentacion de referencia cuando existan.
-4. Si necesitas mantener copias privadas, usa `.local/migration-private/<project_id>/`.
-5. Completa tu configuracion OCI local en `.local/oci/`.
-6. Coloca wallets en `.local/autonomous/wallets/<env>/<adb_name>/`.
-7. Levanta Docker con `docker compose up -d`.
-8. Abre el repo con Codex App desde Cursor o VS Code.
-9. Si quieres que Codex te guie paso a paso, empieza con `docs/codex-advisor.md` y la skill `oci-medallion-advisor`.
-10. Ejecuta el intake con `python scripts/migration_intake.py --repo-root . --project-id <project_id>`.
-11. Ajusta `project.medallion.yaml`.
-12. Usa las skills `oci-medallion-advisor`, `oci-medallion-migration-intake`, `oci-medallion-bootstrap`, `oci-medallion-scaffold`, `oci-medallion-publish`, `oci-medallion-qa` y `oci-medallion-validate`.
-13. Si Terraform o un recurso OCI no estan claros durante el despliegue, usa `oci-terraform-fallback` como referencia oficial antes de cambiar `infra/` o un MCP.
+4. Completa tu configuracion OCI local en `.local/oci/`.
+5. Coloca wallets en `.local/autonomous/wallets/<env>/<adb_name>/`.
+6. Levanta Docker con `docker compose up -d`.
+7. Abre el repo con Codex App desde Cursor o VS Code.
+8. Si quieres que Codex te guie paso a paso, empieza con `docs/codex-advisor.md` y la skill `oci-medallion-advisor`.
+9. Ejecuta el intake con `python scripts/migration_intake.py --repo-root . --project-id <project_id>`.
+10. Ajusta `project.medallion.yaml`.
+11. Usa las skills `oci-medallion-advisor`, `oci-medallion-migration-intake`, `oci-medallion-bootstrap`, `oci-medallion-scaffold`, `oci-medallion-publish`, `oci-medallion-qa` y `oci-medallion-validate`.
+12. Si Terraform o un recurso OCI no estan claros durante el despliegue, usa `oci-terraform-fallback` como referencia oficial antes de cambiar `infra/` o un MCP.
 
 ## Prompt recomendado para clientes
 
@@ -65,7 +64,7 @@ Trabaja asi:
 2. hazme preguntas una por una
 3. si falta un archivo, dime exactamente en que ruta debe ir y que contenido minimo esperas
 4. pregunta explicitamente por SQL, scripts heredados, data o csv/parquet y documentacion de referencia
-5. si te digo que luego te pasare archivos, exigeme la ruta exacta donde estan hoy y la ruta destino dentro de workspace/migration-input/<project_id>/ o .local/migration-private/<project_id>/
+5. si te digo que luego te pasare archivos, exigeme la ruta exacta donde estan hoy y la ruta destino dentro de workspace/migration-input/<project_id>/
 6. asume por defecto un despliegue end-to-end hasta Autonomous Database, con entrega final en gold_adb
 7. solo pregunta por un alcance parcial si yo lo pido de forma explicita
 8. pregunta si ya existe algun bucket o source asset con informacion, a que capa pertenece y si la carga se hara por fuera de este flujo

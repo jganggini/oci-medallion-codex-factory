@@ -34,7 +34,7 @@ Usa esta skill para convertir una solicitud abierta en un plan operable, guiado 
    - contenido minimo esperado
 8. si el usuario dice que luego entregara archivos, exigir siempre:
    - `source_path` exacto donde estan hoy
-   - `target_path` exacto dentro de `workspace/migration-input/<project_id>/...` o `.local/migration-private/<project_id>/...`
+   - `target_path` exacto dentro de `workspace/migration-input/<project_id>/...`
    - tipo de insumo pendiente
 9. preguntar explicitamente si ya existe algun bucket o source asset con informacion, a que capa pertenece y si la carga de archivos se hara por fuera de este flujo
 10. no asumir que un bucket poblado significa que ya existen todas las capas landing, bronze, silver, refined y gold

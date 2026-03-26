@@ -2,7 +2,7 @@
 
 ## Resumen
 
-El repo separa tres zonas locales con responsabilidades diferentes.
+El repo separa dos zonas locales operativas y una zona de configuracion sensible.
 
 ## `workspace/migration-input/`
 
@@ -37,7 +37,7 @@ Cada ambiente contiene el compartment espejo y carpetas por servicio.
 
 ## `.local/`
 
-Zona no versionada para material sensible y configuracion local.
+Zona no versionada solo para configuracion sensible y artefactos locales del entorno.
 
 Estructura sugerida:
 
@@ -46,12 +46,11 @@ Estructura sugerida:
 - `.local/oci/profiles/<env>/`
 - `.local/autonomous/wallets/<env>/<adb_name>/`
 - `.local/secrets/project.<env>.env`
-- `.local/migration-private/<project_id>/...`
 
-`migration-private/` existe para casos donde parte del material fuente no debe entrar al workspace versionado. El intake oficial sigue trabajando sobre `workspace/migration-input/<project_id>/`.
+No debe usarse `.local/` como segunda ruta de insumos de migracion. El intake oficial y el asesor trabajan solo sobre `workspace/migration-input/<project_id>/`.
 
 Si durante la entrevista el usuario dice que luego entregara archivos, el plan debe registrar siempre:
 
 - ruta fuente exacta donde hoy estan los archivos
-- ruta destino exacta dentro de `workspace/migration-input/<project_id>/...` o `.local/migration-private/<project_id>/...`
+- ruta destino exacta dentro de `workspace/migration-input/<project_id>/...`
 - tipo de insumo: `sql`, `scripts`, `data`, `references`, `samples` o `exports`

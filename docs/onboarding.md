@@ -15,7 +15,7 @@
 2. Ejecuta `setup-dev.ps1` o `setup-dev.sh`.
 3. Crea o elige un `project_id`.
 4. Coloca insumos en `workspace/migration-input/<project_id>/`, incluyendo `sql/`, `scripts/`, `data/`, `docs/`, `references/`, `samples/` y `exports/` segun aplique.
-5. Si tienes insumos sensibles, guardalos primero en `.local/migration-private/<project_id>/` y copia solo la version sanitizada al workspace. Si todavia no los copiaras, registra la ruta fuente exacta y la ruta destino planeada.
+5. Si aun no copiaras algun insumo, registra la ruta fuente exacta y la ruta destino planeada dentro de `workspace/migration-input/<project_id>/`.
 6. Completa `.local/oci/config` y `.local/oci/key.pem`.
 7. Coloca wallets en `.local/autonomous/wallets/<env>/<adb_name>/`.
 8. Levanta Docker con `docker compose up -d`.

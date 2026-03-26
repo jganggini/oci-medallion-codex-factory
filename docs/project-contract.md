@@ -42,7 +42,7 @@ Cada proyecto medallion debe definir un `project.medallion.yaml`.
 - `sql_sources`, `script_sources`, `data_sources`, `doc_sources`, `sample_sources` y `reference_doc_sources` deben ser relativos a `migration_input_root`.
 - `pending_input_deliveries` debe registrar cualquier archivo prometido durante la entrevista que aun no fue copiado al repo, con `kind`, `source_path`, `target_path` y `status`.
 - `pending_input_deliveries.kind` debe usar valores como `sql`, `scripts`, `data`, `references`, `samples` o `exports`.
-- `pending_input_deliveries.target_path` debe apuntar a `workspace/migration-input/<project_id>/...` o `.local/migration-private/<project_id>/...`.
+- `pending_input_deliveries.target_path` debe apuntar solo a `workspace/migration-input/<project_id>/...`.
 - `target_layers` debe diferenciar `landing_external`, `bronze_raw`, `silver_trusted`, `gold_refined` y `gold_adb`.
 - `target_layers.gold_adb` debe quedar en `true` cuando `deployment_scope` sea `end_to_end_gold`.
 - `existing_buckets` no puede usarse para inferir que todas las capas ya existen.

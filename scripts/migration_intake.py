@@ -84,9 +84,6 @@ def build_inventory(repo_root: Path, project_root: Path) -> dict[str, object]:
         optional_sections[name] = collect_files(folder, INTERESTING_SUFFIXES[name]) if folder.exists() else []
         optional_candidates[name] = detect_candidates(name, optional_sections[name])
 
-    private_root = repo_root / ".local" / "migration-private" / project_root.name
-    private_exists = private_root.exists()
-
     blockers: list[str] = []
     warnings: list[str] = []
 
@@ -104,10 +101,6 @@ def build_inventory(repo_root: Path, project_root: Path) -> dict[str, object]:
         warnings.append("No se encontraron scripts heredados o wrappers tecnicos en scripts/.")
     if not optional_sections["references"]:
         warnings.append("No se encontraron documentos de referencia en references/.")
-    if private_exists and (not sections["sql"] or not sections["docs"]):
-        warnings.append(
-            "Existe una zona privada en .local/migration-private/. Revisa si hay insumos sensibles que deban sanitizarse y copiarse al workspace canonico."
-        )
 
     next_steps = [
         "Revisar inventory.md y completar los faltantes.",
@@ -129,8 +122,6 @@ def build_inventory(repo_root: Path, project_root: Path) -> dict[str, object]:
     return {
         "project_id": project_root.name,
         "project_root": str(project_root),
-        "private_local_root": str(private_root),
-        "private_local_exists": private_exists,
         "missing_directories": missing,
         "sections": sections,
         "candidate_files": candidates,
@@ -148,7 +139,6 @@ def render_markdown(inventory: dict[str, object]) -> str:
         f"# Inventory - {inventory['project_id']}",
         "",
         f"Ready for scaffold: `{inventory['ready_for_scaffold']}`",
-        f"Private local zone detected: `{inventory['private_local_exists']}`",
         "",
     ]
 
