@@ -22,7 +22,7 @@ Este repo permite que un equipo tome SQL heredado, documentos funcionales, DDL, 
 - `mcp/`
   Catalogo, contratos y manifests de MCPs por servicio OCI.
 - `skills/`
-  Workflows de Codex para bootstrap, intake, scaffold, publicacion y validacion.
+  Workflows de Codex para asesor guiado, bootstrap, intake, scaffold, publicacion y validacion.
 - `templates/`
   Plantillas base de manifiestos y esqueletos de proyecto.
 - `examples/`
@@ -43,9 +43,10 @@ Este repo permite que un equipo tome SQL heredado, documentos funcionales, DDL, 
 5. Completa tu configuracion OCI local en `.local/oci/`.
 6. Levanta Docker con `docker compose up -d`.
 7. Abre el repo con Codex App desde Cursor o VS Code.
-8. Ejecuta el intake con `python scripts/migration_intake.py --repo-root . --project-id <project_id>`.
-9. Usa las skills `oci-medallion-migration-intake`, `oci-medallion-bootstrap` y `oci-medallion-scaffold`.
-10. Si Terraform o un recurso OCI no estan claros durante el despliegue, usa `oci-terraform-fallback` como referencia oficial antes de cambiar `infra/` o un MCP.
+8. Si quieres que Codex te guie paso a paso, empieza con `docs/codex-advisor.md` y la skill `oci-medallion-advisor`.
+9. Ejecuta el intake con `python scripts/migration_intake.py --repo-root . --project-id <project_id>`.
+10. Usa las skills `oci-medallion-advisor`, `oci-medallion-migration-intake`, `oci-medallion-bootstrap` y `oci-medallion-scaffold`.
+11. Si Terraform o un recurso OCI no estan claros durante el despliegue, usa `oci-terraform-fallback` como referencia oficial antes de cambiar `infra/` o un MCP.
 
 ## Contratos clave
 
@@ -58,6 +59,7 @@ Este repo permite que un equipo tome SQL heredado, documentos funcionales, DDL, 
 
 - [ARCHITECTURE.md](ARCHITECTURE.md)
 - [docs/onboarding.md](docs/onboarding.md)
+- [docs/codex-advisor.md](docs/codex-advisor.md)
 - [docs/local-zones.md](docs/local-zones.md)
 - [docs/project-contract.md](docs/project-contract.md)
 - [docs/oci-mirror.md](docs/oci-mirror.md)

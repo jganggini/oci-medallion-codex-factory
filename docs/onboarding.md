@@ -19,15 +19,18 @@
 6. Completa `.local/oci/config` y `.local/oci/key.pem`.
 7. Coloca wallets en `.local/autonomous/wallets/<env>/<adb_name>/`.
 8. Levanta Docker con `docker compose up -d`.
-9. Ejecuta `python scripts/migration_intake.py --repo-root . --project-id <project_id>`.
-10. Revisa `workspace/migration-input/<project_id>/_inventory/inventory.md`.
-11. Ajusta `project.medallion.yaml`.
-12. Ejecuta las skills en este orden:
+9. Si quieres que Codex te guie paso a paso, abre `docs/codex-advisor.md` y empieza con `oci-medallion-advisor`.
+10. Ejecuta `python scripts/migration_intake.py --repo-root . --project-id <project_id>`.
+11. Revisa `workspace/migration-input/<project_id>/_inventory/inventory.md`.
+12. Ajusta `project.medallion.yaml`.
+13. Ejecuta las skills en este orden:
+    - `oci-medallion-advisor`
     - `oci-medallion-migration-intake`
     - `oci-medallion-bootstrap`
     - `oci-medallion-network-foundation`
     - `oci-medallion-scaffold`
     - `oci-medallion-publish`
+    - `oci-medallion-qa`
     - `oci-terraform-fallback` si Terraform o un recurso OCI no estan claros o hay drift
     - `oci-medallion-validate`
 

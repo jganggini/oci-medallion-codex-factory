@@ -22,6 +22,7 @@ Cada MCP debe:
 
 ## Skills
 
+- `oci-medallion-advisor`
 - `oci-medallion-bootstrap`
 - `oci-medallion-migration-intake`
 - `oci-medallion-network-foundation`
@@ -34,12 +35,13 @@ Cada MCP debe:
 
 ## Orden recomendado
 
-1. `oci-medallion-migration-intake`
-2. `oci-medallion-bootstrap`
-3. `oci-medallion-network-foundation`
-4. `oci-medallion-scaffold`
-5. `oci-medallion-publish`
-6. `oci-medallion-qa`
-7. `oci-terraform-fallback` cuando el provider OCI, el recurso Terraform o el drift no esten claros
-8. `oci-medallion-validate`
-9. `oci-medallion-incident` solo cuando exista un fallo operativo o de despliegue
+1. `oci-medallion-advisor`
+2. `oci-medallion-migration-intake`
+3. `oci-medallion-bootstrap`
+4. `oci-medallion-network-foundation`
+5. `oci-medallion-scaffold`
+6. `oci-medallion-publish`
+7. `oci-medallion-qa`
+8. `oci-terraform-fallback` cuando el provider OCI, el recurso Terraform o el drift no esten claros
+9. `oci-medallion-validate`
+10. `oci-medallion-incident` solo cuando exista un fallo operativo o de despliegue

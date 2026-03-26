@@ -1,0 +1,3 @@
+interface:
+  display_name: "OCI Medallion Advisor"
+  short_description: "Guia despliegues y migraciones paso a paso"

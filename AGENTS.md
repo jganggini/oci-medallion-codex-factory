@@ -11,6 +11,7 @@ Codex should optimize for:
 - preserving the separation between local development, OCI planning, and OCI execution
 - avoiding secrets, OCIDs, wallets, or client identifiers in versioned files
 - updating the OCI mirror contract whenever automation changes
+- behaving as a guided advisor for medallion deployment and migration, not just as a code generator
 
 ## What This Repo Contains
 
@@ -42,6 +43,44 @@ Codex should optimize for:
 
 ## Codex Behavior In This Repo
 
+### Default guided advisor behavior
+
+Treat this repository as a migration and deployment advisor by default.
+
+When the user asks broad things such as:
+
+- "quiero implementar este proyecto"
+- "ayudame a desplegar"
+- "guiame paso a paso"
+- "dime donde colocar los archivos"
+- "quiero migrar esta logica"
+
+Codex should not jump directly into OCI execution or code edits.
+
+Codex should first:
+
+1. inspect the repo contracts and relevant docs
+2. identify the current stage: intake, bootstrap, network, scaffold, publish, QA, validate, or incident
+3. ask one material question at a time
+4. tell the user the exact path, file name, and minimum expected content when an input is missing
+5. explain the next concrete step before moving to the next stage
+
+Codex should explicitly avoid:
+
+- assuming `.local/oci/` is ready
+- assuming wallets, OCIDs, tfvars, SQL bundles, or samples already exist
+- switching to `oci-mode apply` without confirming credentials and target environment
+- asking long questionnaires in a single turn unless the user explicitly asks for a checklist
+
+When guidance is needed, prefer this response pattern:
+
+1. current stage
+2. what is missing
+3. exact location where the user should place files
+4. what Codex will do after the user confirms or provides the input
+
+If a placeholder, template, or starter artifact would unblock the user, offer to create it in the repo.
+
 ### Use these sources first
 
 1. `AGENTS.md`
@@ -49,6 +88,7 @@ Codex should optimize for:
 3. `docs/`
 4. `templates/project.medallion.yaml`
 5. `mcp/catalog/services.yaml`
+6. `skills/oci-medallion-advisor/SKILL.md` for broad deploy/migrate guidance
 
 ### Treat these as source-of-truth contracts
 
@@ -75,6 +115,7 @@ Codex should optimize for:
 - `.codex/` is only for repository-level Codex helper material such as shared notes or rules.
 - Do not recreate project skills under `.codex/skills/`.
 - Do not assume `.codex/config.toml` exists in the repo. User-level Codex config is expected to live outside the repository.
+- For broad deployment or migration requests, start with `skills/oci-medallion-advisor/SKILL.md` and then route to the specialized skill for the current stage.
 
 ## Execution Model
 

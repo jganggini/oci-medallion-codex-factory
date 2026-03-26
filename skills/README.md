@@ -4,6 +4,7 @@ Skills de Codex para operar el factory medallion en OCI.
 
 ## Skills incluidas
 
+- `oci-medallion-advisor`
 - `oci-medallion-bootstrap`
 - `oci-medallion-migration-intake`
 - `oci-medallion-network-foundation`
@@ -16,12 +17,13 @@ Skills de Codex para operar el factory medallion en OCI.
 
 ## Secuencia recomendada
 
-1. intake
-2. bootstrap
-3. network foundation
-4. scaffold
-5. publish
-6. qa
-7. terraform fallback cuando un recurso OCI no este claro, exista drift o falle el despliegue
-8. validate
-9. incident solo cuando haya fallos operativos
+1. advisor
+2. intake
+3. bootstrap
+4. network foundation
+5. scaffold
+6. publish
+7. qa
+8. terraform fallback cuando un recurso OCI no este claro, exista drift o falle el despliegue
+9. validate
+10. incident solo cuando haya fallos operativos
