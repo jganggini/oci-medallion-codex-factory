@@ -1,0 +1,316 @@
+{
+  "contract_name": "agg_resumen_archivos_trafico_gold",
+  "contract_path": "D:\\dev\\oci-medallion-codex-factory\\workspace\\migration-input\\trafico-datos\\quality\\contracts\\agg_resumen_archivos_trafico.contract.json",
+  "dataset": "agg_resumen_archivos_trafico",
+  "layer": "gold",
+  "runtime": "local",
+  "oci_mode": "plan",
+  "created_at_utc": "20260326T155152Z",
+  "bucket_profiles": {
+    "gold_sample": {
+      "target_name": "gold_sample",
+      "bucket_name": "bucket-trusted",
+      "object_glob": "objects/agg_resumen_archivos_trafico_*.csv",
+      "data_format": "csv",
+      "matched_files": [
+        "D:\\dev\\oci-medallion-codex-factory\\workspace\\oci-mirror\\dev\\compartment-data-medallion-dev\\buckets\\bucket-trusted\\objects\\agg_resumen_archivos_trafico_sample.csv"
+      ],
+      "file_count": 1,
+      "total_bytes": 224,
+      "row_count": 3,
+      "columns": [
+        "ID_DWH_DIA",
+        "ID_DWH_PERIODO",
+        "FILE_OUTPUT",
+        "TIPO_TRAF",
+        "Q_REGISTROS",
+        "Q_REGISTROS_OK",
+        "CANTEVENTOS_DISCARD"
+      ],
+      "sample_rows": [
+        {
+          "ID_DWH_DIA": "20260325",
+          "ID_DWH_PERIODO": "1",
+          "FILE_OUTPUT": "trafico_001.csv",
+          "TIPO_TRAF": "DATA",
+          "Q_REGISTROS": "125",
+          "Q_REGISTROS_OK": "120",
+          "CANTEVENTOS_DISCARD": "5"
+        },
+        {
+          "ID_DWH_DIA": "20260325",
+          "ID_DWH_PERIODO": "2",
+          "FILE_OUTPUT": "trafico_002.csv",
+          "TIPO_TRAF": "DATA",
+          "Q_REGISTROS": "300",
+          "Q_REGISTROS_OK": "260",
+          "CANTEVENTOS_DISCARD": "40"
+        },
+        {
+          "ID_DWH_DIA": "20260326",
+          "ID_DWH_PERIODO": "1",
+          "FILE_OUTPUT": "trafico_003.csv",
+          "TIPO_TRAF": "VOICE",
+          "Q_REGISTROS": "425",
+          "Q_REGISTROS_OK": "390",
+          "CANTEVENTOS_DISCARD": "35"
+        }
+      ],
+      "row_level_supported": true,
+      "unsupported_reason": null
+    }
+  },
+  "metrics": {
+    "bucket.gold_sample.row_count": 3
+  },
+  "checks": [
+    {
+      "name": "gold_sample_present",
+      "category": "bucket",
+      "type": "file_presence",
+      "severity": "critical",
+      "status": "passed",
+      "message": "Se encontraron archivos",
+      "actual": 1,
+      "expected": "> 0",
+      "details": {}
+    },
+    {
+      "name": "gold_sample_row_count_at_least_one",
+      "category": "bucket",
+      "type": "row_count_at_least",
+      "severity": "high",
+      "status": "passed",
+      "message": "Cantidad de filas: 3",
+      "actual": 3,
+      "expected": 1,
+      "details": {},
+      "metric_key": "bucket.gold_sample.row_count"
+    },
+    {
+      "name": "gold_sample_required_columns",
+      "category": "bucket",
+      "type": "required_columns",
+      "severity": "critical",
+      "status": "passed",
+      "message": "Columnas requeridas presentes",
+      "actual": [
+        "ID_DWH_DIA",
+        "ID_DWH_PERIODO",
+        "FILE_OUTPUT",
+        "TIPO_TRAF",
+        "Q_REGISTROS",
+        "Q_REGISTROS_OK",
+        "CANTEVENTOS_DISCARD"
+      ],
+      "expected": [
+        "ID_DWH_DIA",
+        "ID_DWH_PERIODO",
+        "FILE_OUTPUT",
+        "TIPO_TRAF",
+        "Q_REGISTROS",
+        "Q_REGISTROS_OK",
+        "CANTEVENTOS_DISCARD"
+      ],
+      "details": {
+        "missing_columns": []
+      }
+    },
+    {
+      "name": "gold_sample_unique_key",
+      "category": "bucket",
+      "type": "unique_key",
+      "severity": "high",
+      "status": "passed",
+      "message": "Llave unica sin duplicados",
+      "actual": 0,
+      "expected": 0,
+      "details": {
+        "key_columns": [
+          "ID_DWH_DIA",
+          "ID_DWH_PERIODO",
+          "FILE_OUTPUT",
+          "TIPO_TRAF"
+        ]
+      }
+    },
+    {
+      "name": "gold_sample_not_null_core_columns",
+      "category": "bucket",
+      "type": "not_null",
+      "severity": "high",
+      "status": "passed",
+      "message": "Columnas sin nulos",
+      "actual": {
+        "ID_DWH_DIA": 0,
+        "FILE_OUTPUT": 0,
+        "TIPO_TRAF": 0,
+        "Q_REGISTROS": 0
+      },
+      "expected": {
+        "ID_DWH_DIA": 0,
+        "FILE_OUTPUT": 0,
+        "TIPO_TRAF": 0,
+        "Q_REGISTROS": 0
+      },
+      "details": {}
+    },
+    {
+      "name": "gold_sample_file_name_pattern",
+      "category": "bucket",
+      "type": "file_name_regex",
+      "severity": "medium",
+      "status": "passed",
+      "message": "Todos los archivos cumplen el patron",
+      "actual": [
+        "agg_resumen_archivos_trafico_sample.csv"
+      ],
+      "expected": "^agg_resumen_archivos_trafico_.*\\.csv$",
+      "details": {}
+    },
+    {
+      "name": "adb_manifest_exists",
+      "category": "adb",
+      "type": "mirror_path_exists",
+      "severity": "critical",
+      "status": "passed",
+      "message": "Artefacto encontrado",
+      "actual": "D:\\dev\\oci-medallion-codex-factory\\workspace\\oci-mirror\\dev\\compartment-data-medallion-dev\\autonomous_database\\adb_trafico_gold\\database.manifest.json",
+      "expected": "exists",
+      "details": {}
+    },
+    {
+      "name": "app_gold_user_receipt_exists",
+      "category": "adb",
+      "type": "mirror_path_exists",
+      "severity": "high",
+      "status": "passed",
+      "message": "Artefacto encontrado",
+      "actual": "D:\\dev\\oci-medallion-codex-factory\\workspace\\oci-mirror\\dev\\compartment-data-medallion-dev\\autonomous_database\\adb_trafico_gold\\users\\app_gold\\receipts",
+      "expected": "exists",
+      "details": {}
+    },
+    {
+      "name": "bootstrap_script_exists",
+      "category": "adb",
+      "type": "mirror_path_exists",
+      "severity": "high",
+      "status": "passed",
+      "message": "Artefacto encontrado",
+      "actual": "D:\\dev\\oci-medallion-codex-factory\\workspace\\oci-mirror\\dev\\compartment-data-medallion-dev\\autonomous_database\\adb_trafico_gold\\bootstrap\\app_gold-bootstrap.sql",
+      "expected": "exists",
+      "details": {}
+    },
+    {
+      "name": "manifest_database_user_matches",
+      "category": "adb",
+      "type": "manifest_field_equals",
+      "severity": "medium",
+      "status": "passed",
+      "message": "Campo database_user: app_gold",
+      "actual": "app_gold",
+      "expected": "app_gold",
+      "details": {}
+    },
+    {
+      "name": "app_gold_user_exists_in_adb",
+      "category": "adb",
+      "type": "sql_scalar_equals",
+      "severity": "critical",
+      "status": "skipped",
+      "message": "El check SQL requiere --runtime oci --oci-mode apply",
+      "actual": null,
+      "expected": null,
+      "details": {},
+      "metric_key": "adb.app_gold.user_exists"
+    },
+    {
+      "name": "agg_table_exists_in_adb",
+      "category": "adb",
+      "type": "sql_scalar_equals",
+      "severity": "critical",
+      "status": "skipped",
+      "message": "El check SQL requiere --runtime oci --oci-mode apply",
+      "actual": null,
+      "expected": null,
+      "details": {},
+      "metric_key": "adb.agg.table_exists"
+    },
+    {
+      "name": "agg_row_count_matches_validated_baseline",
+      "category": "adb",
+      "type": "sql_scalar_equals",
+      "severity": "critical",
+      "status": "skipped",
+      "message": "El check SQL requiere --runtime oci --oci-mode apply",
+      "actual": null,
+      "expected": null,
+      "details": {},
+      "metric_key": "adb.agg.row_count"
+    },
+    {
+      "name": "agg_sum_q_registros_matches_validated_baseline",
+      "category": "adb",
+      "type": "sql_scalar_equals",
+      "severity": "high",
+      "status": "skipped",
+      "message": "El check SQL requiere --runtime oci --oci-mode apply",
+      "actual": null,
+      "expected": null,
+      "details": {},
+      "metric_key": "adb.agg.sum_q_registros"
+    },
+    {
+      "name": "agg_sum_q_registros_ok_matches_validated_baseline",
+      "category": "adb",
+      "type": "sql_scalar_equals",
+      "severity": "high",
+      "status": "skipped",
+      "message": "El check SQL requiere --runtime oci --oci-mode apply",
+      "actual": null,
+      "expected": null,
+      "details": {},
+      "metric_key": "adb.agg.sum_q_registros_ok"
+    },
+    {
+      "name": "agg_sum_discard_matches_validated_baseline",
+      "category": "adb",
+      "type": "sql_scalar_equals",
+      "severity": "high",
+      "status": "skipped",
+      "message": "El check SQL requiere --runtime oci --oci-mode apply",
+      "actual": null,
+      "expected": null,
+      "details": {},
+      "metric_key": "adb.agg.sum_discard"
+    },
+    {
+      "name": "gold_sample_not_larger_than_final_adb_dataset",
+      "category": "reconciliation",
+      "type": "metric_compare",
+      "severity": "medium",
+      "status": "skipped",
+      "message": "No existe la metrica adb.agg.row_count",
+      "actual": null,
+      "expected": null,
+      "details": {}
+    }
+  ],
+  "summary": {
+    "overall_status": "warn",
+    "total_checks": 17,
+    "by_status": {
+      "passed": 10,
+      "skipped": 7
+    },
+    "by_severity": {
+      "critical": 6,
+      "high": 8,
+      "medium": 3
+    }
+  },
+  "database_name": "adb_trafico_gold",
+  "gate": {
+    "severity_threshold": "high"
+  }
+}

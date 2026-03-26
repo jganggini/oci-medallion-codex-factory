@@ -1,0 +1,17 @@
+{
+  "contract_name": "agg_resumen_archivos_trafico_gold",
+  "result_path": "D:\\dev\\oci-medallion-codex-factory\\workspace\\oci-mirror\\dev\\compartment-data-medallion-dev\\quality\\runs\\20260326T155152Z-agg_resumen_archivos_trafico_gold\\result.json",
+  "summary": {
+    "overall_status": "warn",
+    "total_checks": 17,
+    "by_status": {
+      "passed": 10,
+      "skipped": 7
+    },
+    "by_severity": {
+      "critical": 6,
+      "high": 8,
+      "medium": 3
+    }
+  }
+}

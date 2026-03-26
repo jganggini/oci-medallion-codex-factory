@@ -3,7 +3,8 @@ runtime: python
 service: data-integration
 mirror_output: workspace/oci-mirror/<env>/<compartment>/data_integration/
 expected_tools:
-  - create_workspace_metadata
+  - create_workspace
+  - create_project
   - create_folder
   - create_task_from_dataflow
   - create_pipeline

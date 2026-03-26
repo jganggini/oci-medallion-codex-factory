@@ -108,6 +108,46 @@ def main() -> int:
             "--environment",
             args.environment,
             "--command",
+            "create-project",
+            "--workspace-name",
+            args.workspace_name,
+            "--project-name",
+            "Medallion Demo",
+            "--identifier",
+            "MEDALLION_DEMO",
+            "--label",
+            "medallion",
+            "--label",
+            "demo",
+        ],
+    )
+    run_command(
+        repo_root,
+        [
+            "mcp/servers/oci-data-integration-mcp/server.py",
+            "--repo-root",
+            str(repo_root),
+            "--environment",
+            args.environment,
+            "--command",
+            "create-folder",
+            "--workspace-name",
+            args.workspace_name,
+            "--folder-name",
+            "Data Flow Tasks",
+            "--identifier",
+            "DATA_FLOW_TASKS",
+        ],
+    )
+    run_command(
+        repo_root,
+        [
+            "mcp/servers/oci-data-integration-mcp/server.py",
+            "--repo-root",
+            str(repo_root),
+            "--environment",
+            args.environment,
+            "--command",
             "create-task-from-dataflow",
             "--workspace-name",
             args.workspace_name,
@@ -115,6 +155,10 @@ def main() -> int:
             "run-demo-app",
             "--application-name",
             args.application_name,
+            "--aggregator-key",
+            "MEDALLION_DEMO",
+            "--task-key",
+            "RUN_DEMO_APP_KEY",
         ],
     )
     run_command(
@@ -149,6 +193,24 @@ def main() -> int:
             args.database_name,
             "--database-user",
             "app_gold",
+        ],
+    )
+    run_command(
+        repo_root,
+        [
+            "mcp/servers/oci-autonomous-database-mcp/server.py",
+            "--repo-root",
+            str(repo_root),
+            "--environment",
+            args.environment,
+            "--command",
+            "create-database-user",
+            "--database-name",
+            args.database_name,
+            "--database-user",
+            "app_gold",
+            "--password-placeholder",
+            "APP_GOLD_PASSWORD",
         ],
     )
     run_command(

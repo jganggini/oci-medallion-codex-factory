@@ -1,0 +1,21 @@
+{
+  "gate_name": "agg_resumen_archivos_trafico_gold",
+  "gate_path": "D:\\dev\\oci-medallion-codex-factory\\workspace\\oci-mirror\\dev\\compartment-data-medallion-dev\\quality\\gates\\20260326T155152Z-agg_resumen_archivos_trafico_gold\\gate.json",
+  "summary": {
+    "status": "WARN",
+    "severity_threshold": "high",
+    "failed_at_threshold": 0,
+    "failed_below_threshold": 0,
+    "skipped": 7,
+    "blocking_checks": [],
+    "warning_checks": [
+      "app_gold_user_exists_in_adb",
+      "agg_table_exists_in_adb",
+      "agg_row_count_matches_validated_baseline",
+      "agg_sum_q_registros_matches_validated_baseline",
+      "agg_sum_q_registros_ok_matches_validated_baseline",
+      "agg_sum_discard_matches_validated_baseline",
+      "gold_sample_not_larger_than_final_adb_dataset"
+    ]
+  }
+}

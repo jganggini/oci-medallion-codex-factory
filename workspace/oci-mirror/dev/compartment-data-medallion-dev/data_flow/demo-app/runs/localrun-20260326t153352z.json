@@ -1,0 +1,14 @@
+{
+  "application_name": "demo-app",
+  "run_id": "localrun-20260326t153352z",
+  "state": "SUCCEEDED",
+  "parameters": {
+    "parameters": {
+      "process_date": "2026-03-25"
+    },
+    "wait_for_state": [],
+    "max_wait_seconds": null,
+    "wait_interval_seconds": null
+  },
+  "run_at_utc": "20260326T153352Z"
+}

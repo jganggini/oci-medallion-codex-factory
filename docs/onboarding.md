@@ -28,6 +28,7 @@
     - `oci-medallion-network-foundation`
     - `oci-medallion-scaffold`
     - `oci-medallion-publish`
+    - `oci-terraform-fallback` si Terraform o un recurso OCI no estan claros o hay drift
     - `oci-medallion-validate`
 
 ## Resultado esperado

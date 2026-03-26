@@ -9,3 +9,5 @@ Usa esta skill para preparar la base de un proyecto medallion nuevo.
 3. confirmar `project.medallion.yaml`
 4. revisar `workspace/oci-mirror/<env>/`
 5. crear buckets base con el MCP de Object Storage
+6. si el proyecto usa ADW, registrar `create-adb-definition` y preparar el bootstrap de usuario/tablas con `create-database-user`, `bootstrap-schema` y `apply-sql`
+7. si Terraform o el recurso OCI no estan claros, consultar `oci-terraform-fallback` antes de cambiar `infra/` o un MCP

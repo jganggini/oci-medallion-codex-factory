@@ -45,6 +45,7 @@ Este repo permite que un equipo tome SQL heredado, documentos funcionales, DDL, 
 7. Abre el repo con Codex App desde Cursor o VS Code.
 8. Ejecuta el intake con `python scripts/migration_intake.py --repo-root . --project-id <project_id>`.
 9. Usa las skills `oci-medallion-migration-intake`, `oci-medallion-bootstrap` y `oci-medallion-scaffold`.
+10. Si Terraform o un recurso OCI no estan claros durante el despliegue, usa `oci-terraform-fallback` como referencia oficial antes de cambiar `infra/` o un MCP.
 
 ## Contratos clave
 

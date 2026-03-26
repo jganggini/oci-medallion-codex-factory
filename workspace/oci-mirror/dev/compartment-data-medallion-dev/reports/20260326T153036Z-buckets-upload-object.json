@@ -1,0 +1,7 @@
+{
+  "bucket_name": "bucket-trusted",
+  "source_file": "D:\\dev\\oci_data_flow_medallon\\oci-ai\\autonomous\\sql\\010_create_bt_trf_trafico_datos.sql",
+  "object_name": "ddl-010_create_bt_trf_trafico_datos.sql",
+  "stored_at": "D:\\dev\\oci-medallion-codex-factory\\workspace\\oci-mirror\\dev\\compartment-data-medallion-dev\\buckets\\bucket-trusted\\objects\\ddl-010_create_bt_trf_trafico_datos.sql",
+  "uploaded_at_utc": "20260326T153036Z"
+}

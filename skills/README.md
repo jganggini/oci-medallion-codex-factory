@@ -9,6 +9,8 @@ Skills de Codex para operar el factory medallion en OCI.
 - `oci-medallion-network-foundation`
 - `oci-medallion-scaffold`
 - `oci-medallion-publish`
+- `oci-medallion-qa`
+- `oci-terraform-fallback`
 - `oci-medallion-validate`
 - `oci-medallion-incident`
 
@@ -19,5 +21,7 @@ Skills de Codex para operar el factory medallion en OCI.
 3. network foundation
 4. scaffold
 5. publish
-6. validate
-7. incident solo cuando haya fallos operativos
+6. qa
+7. terraform fallback cuando un recurso OCI no este claro, exista drift o falle el despliegue
+8. validate
+9. incident solo cuando haya fallos operativos

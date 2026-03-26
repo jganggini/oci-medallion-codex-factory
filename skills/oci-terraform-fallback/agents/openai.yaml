@@ -1,0 +1,3 @@
+interface:
+  display_name: "OCI Terraform Fallback"
+  short_description: "Referencia oficial para resolver despliegues Terraform OCI"

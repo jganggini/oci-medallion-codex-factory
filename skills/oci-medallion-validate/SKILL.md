@@ -1,10 +1,12 @@
 # oci-medallion-validate
 
-Usa esta skill para validar contratos, artefactos y espejo OCI.
+Usa esta skill para validar contratos, artefactos, data quality y espejo OCI.
 
 ## Flujo
 
 1. ejecutar `py -3 scripts/validate_factory.py --repo-root .`
 2. revisar el intake y el contexto generado
 3. verificar que existan manifests en buckets, Data Flow, DI y ADB
-4. confirmar que no existan secretos versionados
+4. ejecutar contratos de QA con `oci-data-quality-mcp` cuando el proyecto tenga `quality/contracts/`
+5. confirmar que no existan secretos versionados
+6. si aparece drift o una configuracion OCI no cierra con Terraform, consultar `oci-terraform-fallback` y decidir si conviene ejemplo oficial o Resource Discovery

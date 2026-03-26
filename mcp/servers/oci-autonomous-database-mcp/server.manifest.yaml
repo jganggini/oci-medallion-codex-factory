@@ -4,6 +4,7 @@ service: autonomous-database
 mirror_output: workspace/oci-mirror/<env>/<compartment>/autonomous_database/
 expected_tools:
   - create_autonomous_database
-  - download_wallet_metadata
   - bootstrap_schema
+  - create_database_user
+  - apply_sql_bundle
   - load_gold_objects

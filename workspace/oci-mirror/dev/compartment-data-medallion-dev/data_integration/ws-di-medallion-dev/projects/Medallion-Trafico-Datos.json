@@ -1,0 +1,23 @@
+{
+  "workspace_name": "ws-di-medallion-dev",
+  "project_name": "Medallion Trafico Datos",
+  "created_at_utc": "20260326T153352Z",
+  "extra": {
+    "runtime": "oci",
+    "oci_mode": "plan",
+    "workspace_id": "ocid1.disworkspace.oc1..exampleuniqueID",
+    "identifier": "MEDALLION_TRAFICO_DATOS",
+    "description": null,
+    "registry_metadata": {
+      "aggregatorKey": "PROJECT",
+      "isFavorite": false,
+      "labels": [
+        "medallion",
+        "data-integration"
+      ],
+      "registryVersion": 1
+    },
+    "plan_path": "D:\\dev\\oci-medallion-codex-factory\\workspace\\oci-mirror\\dev\\compartment-data-medallion-dev\\data_integration\\oci-plans\\20260326T153352Z-create-project.json",
+    "result_path": null
+  }
+}

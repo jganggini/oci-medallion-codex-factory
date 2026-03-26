@@ -62,6 +62,7 @@ Este repo permite que un equipo tome SQL heredado, documentos funcionales, DDL, 
 - [docs/oci-mirror.md](docs/oci-mirror.md)
 - [docs/mcp-and-skills.md](docs/mcp-and-skills.md)
 - [docs/local-mcp-demo.md](docs/local-mcp-demo.md)
+- [docs/oci-plan-demo.md](docs/oci-plan-demo.md)
 - [docs/github-publish.md](docs/github-publish.md)
 
 ## Alcance del factory

@@ -16,6 +16,7 @@ Servicios esperados:
 - `data_flow/`
 - `data_integration/`
 - `autonomous_database/`
+- `quality/`
 - `vault/`
 - `reports/`
 
@@ -27,6 +28,7 @@ Servicios esperados:
 - referencias a configuracion local
 - reportes redacted
 - evidencias de despliegue
+- contratos QA, perfiles de bucket, resultados de checks y gates de migracion
 
 ## Contenido prohibido
 

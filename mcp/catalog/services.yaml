@@ -45,22 +45,24 @@ servers:
 
   - name: oci-data-flow-mcp
     runtime: python
-    purpose: Apps, runs, artefactos y evidencias de Data Flow
+    purpose: Apps, updates, runs, JSON externos, artefactos y evidencias de Data Flow
     mirror_outputs:
       - workspace/oci-mirror/<env>/<compartment>/data_flow/
     expected_tools:
       - create_application
+      - update_application
       - publish_archive
       - run_application
       - collect_run_report
 
   - name: oci-data-integration-mcp
     runtime: python
-    purpose: Workspaces, folders, tasks, pipelines y task runs DI
+    purpose: Workspaces, proyectos, folders, tasks, pipelines y task runs DI
     mirror_outputs:
       - workspace/oci-mirror/<env>/<compartment>/data_integration/
     expected_tools:
-      - create_workspace_metadata
+      - create_workspace
+      - create_project
       - create_folder
       - create_task_from_dataflow
       - create_pipeline
@@ -68,14 +70,25 @@ servers:
 
   - name: oci-autonomous-database-mcp
     runtime: python
-    purpose: ADB, bootstrap, wallet metadata y carga de objetos Gold
+    purpose: ADB, bootstrap, creacion de usuarios, ejecucion SQL con wallet y carga de objetos Gold
     mirror_outputs:
       - workspace/oci-mirror/<env>/<compartment>/autonomous_database/
     expected_tools:
       - create_autonomous_database
-      - download_wallet_metadata
       - bootstrap_schema
+      - create_database_user
+      - apply_sql_bundle
       - load_gold_objects
+
+  - name: oci-data-quality-mcp
+    runtime: python
+    purpose: Contratos de calidad, reconciliacion bucket vs ADB y gates de migracion
+    mirror_outputs:
+      - workspace/oci-mirror/<env>/<compartment>/quality/
+    expected_tools:
+      - profile_bucket_data
+      - run_quality_contract
+      - gate_migration
 
   - name: oci-vault-mcp
     runtime: python

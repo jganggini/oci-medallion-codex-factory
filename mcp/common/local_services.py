@@ -8,6 +8,11 @@ from typing import Any
 from .runtime import MirrorContext, append_jsonl, copy_file, ensure_directory, sanitize_name, utc_timestamp, write_json
 
 
+def _record_operation(service_root: Path, context: MirrorContext, service_name: str, operation: str, payload: dict[str, Any]) -> None:
+    append_jsonl(service_root / "operations.log.jsonl", {"operation": operation, **payload})
+    context.report(service_name, operation.replace("_", "-"), payload)
+
+
 def create_bucket_manifest(context: MirrorContext, bucket_name: str, metadata: dict[str, Any]) -> Path:
     bucket_root = context.bucket_root(bucket_name)
     manifest = {
@@ -18,8 +23,7 @@ def create_bucket_manifest(context: MirrorContext, bucket_name: str, metadata: d
     }
     manifest_path = bucket_root / "bucket.manifest.json"
     write_json(manifest_path, manifest)
-    append_jsonl(bucket_root / "operations.log.jsonl", {"operation": "create_bucket", **manifest})
-    context.report("buckets", "create-bucket", manifest)
+    _record_operation(bucket_root, context, "buckets", "create_bucket", manifest)
     return manifest_path
 
 
@@ -35,36 +39,60 @@ def upload_object_to_bucket(context: MirrorContext, bucket_name: str, source_fil
         "stored_at": str(destination),
         "uploaded_at_utc": utc_timestamp(),
     }
-    append_jsonl(bucket_root / "operations.log.jsonl", {"operation": "upload_object", **payload})
-    context.report("buckets", "upload-object", payload)
+    _record_operation(bucket_root, context, "buckets", "upload_object", payload)
     return destination
 
 
-def create_data_flow_application(context: MirrorContext, app_name: str, source_dir: Path, main_file: str, extra: dict[str, Any]) -> Path:
+def write_data_flow_application(
+    context: MirrorContext,
+    app_name: str,
+    source_dir: Path | None,
+    main_file: str,
+    extra: dict[str, Any],
+    json_source_file: Path | None = None,
+    archive_source_file: Path | None = None,
+    operation: str = "create_application",
+) -> dict[str, Path | None]:
     service_root = ensure_directory(context.service_root("data_flow") / sanitize_name(app_name))
     app_root = ensure_directory(service_root / "application")
+
     archive_path = service_root / "archive.zip"
+    mirrored_archive: Path | None = archive_path if archive_path.exists() else None
+    if archive_source_file is not None:
+        mirrored_archive = copy_file(archive_source_file, archive_path)
+    elif source_dir is not None:
+        if archive_path.exists():
+            archive_path.unlink()
+        with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for item in sorted(source_dir.rglob("*")):
+                if item.is_file():
+                    archive.write(item, item.relative_to(source_dir))
+        mirrored_archive = archive_path
 
-    if archive_path.exists():
-        archive_path.unlink()
-
-    with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        for item in sorted(source_dir.rglob("*")):
-            if item.is_file():
-                archive.write(item, item.relative_to(source_dir))
+    application_json_path = app_root / "application.json"
+    mirrored_json: Path | None = application_json_path if application_json_path.exists() else None
+    if json_source_file is not None:
+        mirrored_json = copy_file(json_source_file, application_json_path)
 
     payload = {
         "application_name": app_name,
-        "source_dir": str(source_dir),
+        "source_dir": str(source_dir) if source_dir else None,
         "main_file": main_file,
-        "archive_path": str(archive_path),
+        "archive_path": str(mirrored_archive) if mirrored_archive else None,
+        "archive_source_file": str(archive_source_file) if archive_source_file else None,
+        "application_json_path": str(mirrored_json) if mirrored_json else None,
+        "application_json_source_file": str(json_source_file) if json_source_file else None,
         "extra": extra,
         "created_at_utc": utc_timestamp(),
     }
-    write_json(app_root / "application.manifest.json", payload)
-    append_jsonl(service_root / "operations.log.jsonl", {"operation": "create_application", **payload})
-    context.report("data_flow", "create-application", payload)
-    return archive_path
+    manifest_path = app_root / "application.manifest.json"
+    write_json(manifest_path, payload)
+    _record_operation(service_root, context, "data_flow", operation, payload)
+    return {
+        "manifest_path": manifest_path,
+        "archive_path": mirrored_archive,
+        "application_json_path": mirrored_json,
+    }
 
 
 def run_data_flow_application(context: MirrorContext, app_name: str, parameters: dict[str, Any]) -> Path:
@@ -79,8 +107,7 @@ def run_data_flow_application(context: MirrorContext, app_name: str, parameters:
     }
     run_path = service_root / "runs" / f"{run_id}.json"
     write_json(run_path, run_payload)
-    append_jsonl(service_root / "operations.log.jsonl", {"operation": "run_application", **run_payload})
-    context.report("data_flow", "run-application", run_payload)
+    _record_operation(service_root, context, "data_flow", "run_application", run_payload)
     return run_path
 
 
@@ -94,22 +121,35 @@ def create_di_workspace_metadata(context: MirrorContext, workspace_name: str, ex
     }
     manifest_path = service_root / "workspace.manifest.json"
     write_json(manifest_path, payload)
-    append_jsonl(service_root / "operations.log.jsonl", {"operation": "create_workspace_metadata", **payload})
-    context.report("data_integration", "create-workspace", payload)
+    _record_operation(service_root, context, "data_integration", "create_workspace", payload)
     return manifest_path
 
 
-def create_di_folder(context: MirrorContext, workspace_name: str, folder_name: str) -> Path:
+def create_di_project(context: MirrorContext, workspace_name: str, project_name: str, extra: dict[str, Any]) -> Path:
+    service_root = ensure_directory(context.service_root("data_integration") / sanitize_name(workspace_name))
+    project_path = service_root / "projects" / f"{sanitize_name(project_name)}.json"
+    payload = {
+        "workspace_name": workspace_name,
+        "project_name": project_name,
+        "created_at_utc": utc_timestamp(),
+        "extra": extra,
+    }
+    write_json(project_path, payload)
+    _record_operation(service_root, context, "data_integration", "create_project", payload)
+    return project_path
+
+
+def create_di_folder(context: MirrorContext, workspace_name: str, folder_name: str, extra: dict[str, Any] | None = None) -> Path:
     service_root = ensure_directory(context.service_root("data_integration") / sanitize_name(workspace_name))
     folder_path = service_root / "folders" / f"{sanitize_name(folder_name)}.json"
     payload = {
         "workspace_name": workspace_name,
         "folder_name": folder_name,
         "created_at_utc": utc_timestamp(),
+        "extra": extra or {},
     }
     write_json(folder_path, payload)
-    append_jsonl(service_root / "operations.log.jsonl", {"operation": "create_folder", **payload})
-    context.report("data_integration", "create-folder", payload)
+    _record_operation(service_root, context, "data_integration", "create_folder", payload)
     return folder_path
 
 
@@ -124,8 +164,7 @@ def create_di_dataflow_task(context: MirrorContext, workspace_name: str, task_na
         "extra": extra,
     }
     write_json(task_path, payload)
-    append_jsonl(service_root / "operations.log.jsonl", {"operation": "create_task_from_dataflow", **payload})
-    context.report("data_integration", "create-task-from-dataflow", payload)
+    _record_operation(service_root, context, "data_integration", "create_task_from_dataflow", payload)
     return task_path
 
 
@@ -139,8 +178,7 @@ def create_di_pipeline(context: MirrorContext, workspace_name: str, pipeline_nam
         "created_at_utc": utc_timestamp(),
     }
     write_json(pipeline_path, payload)
-    append_jsonl(service_root / "operations.log.jsonl", {"operation": "create_pipeline", **payload})
-    context.report("data_integration", "create-pipeline", payload)
+    _record_operation(service_root, context, "data_integration", "create_pipeline", payload)
     return pipeline_path
 
 
@@ -156,8 +194,7 @@ def create_adb_definition(context: MirrorContext, adb_name: str, db_user: str, l
     }
     manifest_path = service_root / "database.manifest.json"
     write_json(manifest_path, payload)
-    append_jsonl(service_root / "operations.log.jsonl", {"operation": "create_autonomous_database", **payload})
-    context.report("autonomous_database", "create-adb-definition", payload)
+    _record_operation(service_root, context, "autonomous_database", "create_autonomous_database", payload)
     return manifest_path
 
 
@@ -172,9 +209,67 @@ def write_adb_bootstrap(context: MirrorContext, adb_name: str, db_user: str, sql
         "script_path": str(script_path),
         "created_at_utc": utc_timestamp(),
     }
-    append_jsonl(service_root / "operations.log.jsonl", {"operation": "bootstrap_schema", **payload})
-    context.report("autonomous_database", "bootstrap-schema", payload)
+    _record_operation(service_root, context, "autonomous_database", "bootstrap_schema", payload)
     return script_path
+
+
+def register_adb_user(context: MirrorContext, adb_name: str, db_user: str, sql_text: str, metadata: dict[str, Any]) -> dict[str, Path]:
+    service_root = ensure_directory(context.service_root("autonomous_database") / sanitize_name(adb_name))
+    user_root = ensure_directory(service_root / "users" / sanitize_name(db_user))
+    receipts_root = ensure_directory(user_root / "receipts")
+    script_path = user_root / "create-user.sql"
+    script_path.write_text(sql_text, encoding="utf-8")
+
+    payload = {
+        "database_name": adb_name,
+        "database_user": db_user,
+        "script_path": str(script_path),
+        "created_at_utc": utc_timestamp(),
+        **metadata,
+    }
+    receipt_path = receipts_root / f"{utc_timestamp()}-create-user.json"
+    write_json(receipt_path, payload)
+    _record_operation(service_root, context, "autonomous_database", "create_database_user", payload)
+    return {"script_path": script_path, "receipt_path": receipt_path}
+
+
+def register_adb_sql_execution(
+    context: MirrorContext,
+    adb_name: str,
+    operation: str,
+    source_files: list[Path],
+    metadata: dict[str, Any],
+    rendered_sql: str | None = None,
+) -> Path:
+    service_root = ensure_directory(context.service_root("autonomous_database") / sanitize_name(adb_name))
+    run_id = f"{utc_timestamp()}-{sanitize_name(operation)}"
+    run_root = ensure_directory(service_root / "sql_runs" / run_id)
+    sources_root = ensure_directory(run_root / "sources")
+
+    mirrored_files: list[str] = []
+    for index, source_file in enumerate(source_files, start=1):
+        target = sources_root / f"{index:03d}-{sanitize_name(source_file.name)}"
+        copy_file(source_file, target)
+        mirrored_files.append(str(target))
+
+    rendered_sql_path: str | None = None
+    if rendered_sql is not None:
+        rendered_path = run_root / "rendered.sql"
+        rendered_path.write_text(rendered_sql, encoding="utf-8")
+        rendered_sql_path = str(rendered_path)
+
+    payload = {
+        "database_name": adb_name,
+        "source_files": [str(item) for item in source_files],
+        "mirrored_files": mirrored_files,
+        "rendered_sql_path": rendered_sql_path,
+        "created_at_utc": utc_timestamp(),
+        **metadata,
+    }
+    receipt_path = run_root / "execution.json"
+    write_json(receipt_path, payload)
+    _record_operation(service_root, context, "autonomous_database", operation, payload)
+    return receipt_path
 
 
 def register_adb_load(context: MirrorContext, adb_name: str, object_name: str, source_file: Path) -> Path:
@@ -191,6 +286,5 @@ def register_adb_load(context: MirrorContext, adb_name: str, object_name: str, s
     }
     receipt = load_dir / f"{sanitize_name(object_name)}-{utc_timestamp()}.json"
     write_json(receipt, payload)
-    append_jsonl(service_root / "operations.log.jsonl", {"operation": "load_gold_objects", **payload})
-    context.report("autonomous_database", "load-gold-objects", payload)
+    _record_operation(service_root, context, "autonomous_database", "load_gold_objects", payload)
     return receipt

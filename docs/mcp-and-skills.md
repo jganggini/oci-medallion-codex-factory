@@ -27,6 +27,8 @@ Cada MCP debe:
 - `oci-medallion-network-foundation`
 - `oci-medallion-scaffold`
 - `oci-medallion-publish`
+- `oci-medallion-qa`
+- `oci-terraform-fallback`
 - `oci-medallion-validate`
 - `oci-medallion-incident`
 
@@ -37,5 +39,7 @@ Cada MCP debe:
 3. `oci-medallion-network-foundation`
 4. `oci-medallion-scaffold`
 5. `oci-medallion-publish`
-6. `oci-medallion-validate`
-7. `oci-medallion-incident` solo cuando exista un fallo operativo o de despliegue
+6. `oci-medallion-qa`
+7. `oci-terraform-fallback` cuando el provider OCI, el recurso Terraform o el drift no esten claros
+8. `oci-medallion-validate`
+9. `oci-medallion-incident` solo cuando exista un fallo operativo o de despliegue

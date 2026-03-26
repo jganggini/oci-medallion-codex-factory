@@ -1,0 +1,52 @@
+{
+  "target_name": "gold_sample",
+  "bucket_name": "bucket-trusted",
+  "object_glob": "objects/agg_resumen_archivos_trafico_*.csv",
+  "data_format": "csv",
+  "matched_files": [
+    "D:\\dev\\oci-medallion-codex-factory\\workspace\\oci-mirror\\dev\\compartment-data-medallion-dev\\buckets\\bucket-trusted\\objects\\agg_resumen_archivos_trafico_sample.csv"
+  ],
+  "file_count": 1,
+  "total_bytes": 224,
+  "row_count": 3,
+  "columns": [
+    "ID_DWH_DIA",
+    "ID_DWH_PERIODO",
+    "FILE_OUTPUT",
+    "TIPO_TRAF",
+    "Q_REGISTROS",
+    "Q_REGISTROS_OK",
+    "CANTEVENTOS_DISCARD"
+  ],
+  "sample_rows": [
+    {
+      "ID_DWH_DIA": "20260325",
+      "ID_DWH_PERIODO": "1",
+      "FILE_OUTPUT": "trafico_001.csv",
+      "TIPO_TRAF": "DATA",
+      "Q_REGISTROS": "125",
+      "Q_REGISTROS_OK": "120",
+      "CANTEVENTOS_DISCARD": "5"
+    },
+    {
+      "ID_DWH_DIA": "20260325",
+      "ID_DWH_PERIODO": "2",
+      "FILE_OUTPUT": "trafico_002.csv",
+      "TIPO_TRAF": "DATA",
+      "Q_REGISTROS": "300",
+      "Q_REGISTROS_OK": "260",
+      "CANTEVENTOS_DISCARD": "40"
+    },
+    {
+      "ID_DWH_DIA": "20260326",
+      "ID_DWH_PERIODO": "1",
+      "FILE_OUTPUT": "trafico_003.csv",
+      "TIPO_TRAF": "VOICE",
+      "Q_REGISTROS": "425",
+      "Q_REGISTROS_OK": "390",
+      "CANTEVENTOS_DISCARD": "35"
+    }
+  ],
+  "row_level_supported": true,
+  "unsupported_reason": null
+}

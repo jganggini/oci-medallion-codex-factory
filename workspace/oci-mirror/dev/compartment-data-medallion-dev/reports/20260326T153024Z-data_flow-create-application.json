@@ -1,0 +1,32 @@
+{
+  "application_name": "bronze-to-silver",
+  "source_dir": "D:\\dev\\oci-medallion-codex-factory\\templates\\data_flow\\minimal_app",
+  "main_file": "main.py",
+  "archive_path": "D:\\dev\\oci-medallion-codex-factory\\workspace\\oci-mirror\\dev\\compartment-data-medallion-dev\\data_flow\\bronze-to-silver\\archive.zip",
+  "archive_source_file": null,
+  "application_json_path": null,
+  "application_json_source_file": null,
+  "extra": {
+    "runtime": "oci",
+    "oci_mode": "plan",
+    "archive_uri": "oci://bucket-trusted@example-ns/apps/bronze-to-silver/archive.zip",
+    "file_uri": "oci://bucket-trusted@example-ns/apps/bronze-to-silver/main.py",
+    "logs_bucket_uri": "oci://bucket-trusted@example-ns/logs/",
+    "display_name": "bronze-to-silver",
+    "compartment_id": "ocid1.compartment.oc1..exampleuniqueID",
+    "application_id": null,
+    "application_type": null,
+    "driver_shape": null,
+    "driver_shape_config": null,
+    "executor_shape": null,
+    "executor_shape_config": null,
+    "num_executors": null,
+    "spark_version": null,
+    "language": null,
+    "wait_for_state": [],
+    "max_wait_seconds": null,
+    "wait_interval_seconds": null,
+    "force": false
+  },
+  "created_at_utc": "20260326T153024Z"
+}

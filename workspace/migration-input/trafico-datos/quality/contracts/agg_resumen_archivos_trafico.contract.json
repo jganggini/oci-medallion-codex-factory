@@ -1,0 +1,168 @@
+{
+  "contract_name": "agg_resumen_archivos_trafico_gold",
+  "dataset": "agg_resumen_archivos_trafico",
+  "layer": "gold",
+  "bucket_targets": [
+    {
+      "target_name": "gold_sample",
+      "bucket_name": "bucket-trusted",
+      "object_glob": "objects/agg_resumen_archivos_trafico_*.csv",
+      "data_format": "csv"
+    }
+  ],
+  "bucket_checks": [
+    {
+      "name": "gold_sample_present",
+      "type": "file_presence",
+      "target": "gold_sample",
+      "severity": "critical"
+    },
+    {
+      "name": "gold_sample_row_count_at_least_one",
+      "type": "row_count_at_least",
+      "target": "gold_sample",
+      "expected": 1,
+      "severity": "high",
+      "metric_key": "bucket.gold_sample.row_count"
+    },
+    {
+      "name": "gold_sample_required_columns",
+      "type": "required_columns",
+      "target": "gold_sample",
+      "columns": [
+        "ID_DWH_DIA",
+        "ID_DWH_PERIODO",
+        "FILE_OUTPUT",
+        "TIPO_TRAF",
+        "Q_REGISTROS",
+        "Q_REGISTROS_OK",
+        "CANTEVENTOS_DISCARD"
+      ],
+      "severity": "critical"
+    },
+    {
+      "name": "gold_sample_unique_key",
+      "type": "unique_key",
+      "target": "gold_sample",
+      "columns": [
+        "ID_DWH_DIA",
+        "ID_DWH_PERIODO",
+        "FILE_OUTPUT",
+        "TIPO_TRAF"
+      ],
+      "severity": "high"
+    },
+    {
+      "name": "gold_sample_not_null_core_columns",
+      "type": "not_null",
+      "target": "gold_sample",
+      "columns": [
+        "ID_DWH_DIA",
+        "FILE_OUTPUT",
+        "TIPO_TRAF",
+        "Q_REGISTROS"
+      ],
+      "severity": "high"
+    },
+    {
+      "name": "gold_sample_file_name_pattern",
+      "type": "file_name_regex",
+      "target": "gold_sample",
+      "pattern": "^agg_resumen_archivos_trafico_.*\\.csv$",
+      "severity": "medium"
+    }
+  ],
+  "adb": {
+    "database_name": "adb_trafico_gold",
+    "database_user": "APP_GOLD",
+    "connect_user": "APP_GOLD"
+  },
+  "adb_checks": [
+    {
+      "name": "adb_manifest_exists",
+      "type": "mirror_path_exists",
+      "path": "database.manifest.json",
+      "severity": "critical"
+    },
+    {
+      "name": "app_gold_user_receipt_exists",
+      "type": "mirror_path_exists",
+      "path": "users/app_gold/receipts",
+      "severity": "high"
+    },
+    {
+      "name": "bootstrap_script_exists",
+      "type": "mirror_path_exists",
+      "path": "bootstrap/app_gold-bootstrap.sql",
+      "severity": "high"
+    },
+    {
+      "name": "manifest_database_user_matches",
+      "type": "manifest_field_equals",
+      "field": "database_user",
+      "expected": "app_gold",
+      "severity": "medium"
+    },
+    {
+      "name": "app_gold_user_exists_in_adb",
+      "type": "sql_scalar_equals",
+      "sql_file": "workspace/migration-input/trafico-datos/quality/sql/010_check_app_gold_user_exists.sql",
+      "expected": 1,
+      "severity": "critical",
+      "metric_key": "adb.app_gold.user_exists"
+    },
+    {
+      "name": "agg_table_exists_in_adb",
+      "type": "sql_scalar_equals",
+      "sql_file": "workspace/migration-input/trafico-datos/quality/sql/020_check_agg_table_exists.sql",
+      "expected": 1,
+      "severity": "critical",
+      "metric_key": "adb.agg.table_exists"
+    },
+    {
+      "name": "agg_row_count_matches_validated_baseline",
+      "type": "sql_scalar_equals",
+      "sql_file": "workspace/migration-input/trafico-datos/quality/sql/030_check_agg_row_count.sql",
+      "expected": 43,
+      "severity": "critical",
+      "metric_key": "adb.agg.row_count"
+    },
+    {
+      "name": "agg_sum_q_registros_matches_validated_baseline",
+      "type": "sql_scalar_equals",
+      "sql_file": "workspace/migration-input/trafico-datos/quality/sql/040_check_sum_q_registros.sql",
+      "expected": 1399641,
+      "severity": "high",
+      "metric_key": "adb.agg.sum_q_registros"
+    },
+    {
+      "name": "agg_sum_q_registros_ok_matches_validated_baseline",
+      "type": "sql_scalar_equals",
+      "sql_file": "workspace/migration-input/trafico-datos/quality/sql/050_check_sum_q_registros_ok.sql",
+      "expected": 1076425,
+      "severity": "high",
+      "metric_key": "adb.agg.sum_q_registros_ok"
+    },
+    {
+      "name": "agg_sum_discard_matches_validated_baseline",
+      "type": "sql_scalar_equals",
+      "sql_file": "workspace/migration-input/trafico-datos/quality/sql/060_check_sum_discard.sql",
+      "expected": 323216,
+      "severity": "high",
+      "metric_key": "adb.agg.sum_discard"
+    }
+  ],
+  "reconciliation_checks": [
+    {
+      "name": "gold_sample_not_larger_than_final_adb_dataset",
+      "type": "metric_compare",
+      "left_metric": "bucket.gold_sample.row_count",
+      "operator": "at_most",
+      "right_metric": "adb.agg.row_count",
+      "severity": "medium"
+    }
+  ],
+  "gate": {
+    "severity_threshold": "high"
+  }
+}

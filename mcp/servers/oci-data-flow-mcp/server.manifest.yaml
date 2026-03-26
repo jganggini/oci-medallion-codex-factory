@@ -6,6 +6,7 @@ expected_tools:
   - package_dependency_archive
   - validate_dependency_archive
   - create_application
+  - update_application
   - publish_archive
   - run_application
   - collect_run_report

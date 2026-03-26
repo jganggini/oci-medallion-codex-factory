@@ -8,5 +8,6 @@ Coloca aqui los insumos base para la migracion:
 - `exports/`: salidas esperadas o historicas
 - `mappings/`: cruces campo a campo y taxonomias
 - `notes/`: aclaraciones, exclusiones y decisiones
+- `quality/`: contratos QA, SQL de reconciliacion y muestras para data quality
 
 Esta ruta es la fuente canonica para intake, skills y scaffold.

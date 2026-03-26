@@ -1,0 +1,15 @@
+{
+  "name": "Debug Flow",
+  "identifier": "DEBUG_FLOW",
+  "modelType": "DATA_FLOW",
+  "parentRef": {
+    "parent": "b3b4fb2c-814f-4f14-abd6-07a3f6d3f7f3",
+    "rootDocId": "b3b4fb2c-814f-4f14-abd6-07a3f6d3f7f3"
+  },
+  "registryMetadata": {
+    "aggregatorKey": "b3b4fb2c-814f-4f14-abd6-07a3f6d3f7f3",
+    "registryVersion": 1
+  },
+  "nodes": [],
+  "parameters": []
+}

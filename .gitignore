@@ -13,6 +13,7 @@ __pycache__/
 .pytest_cache/
 .venv/
 venv/
+.codex/config.toml
 workspace/oci-mirror/**/wallet.info.local.json
 workspace/migration-input/**/_inventory/
 workspace/generated/

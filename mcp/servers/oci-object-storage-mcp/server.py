@@ -36,8 +36,8 @@ def main() -> int:
     context = MirrorContext(repo_root=Path(args.repo_root).resolve(), environment=args.environment)
 
     if args.runtime == "oci":
-        execution = OciExecutionContext(repo_root=context.repo_root, profile=args.oci_profile)
         if args.command == "create-bucket":
+            execution = OciExecutionContext(repo_root=context.repo_root, profile=args.oci_profile)
             if not args.compartment_id:
                 raise SystemExit("--compartment-id es requerido en runtime oci para create-bucket")
             command = [
@@ -78,6 +78,11 @@ def main() -> int:
         source_file = Path(args.source_file).resolve()
         if not source_file.exists():
             raise FileNotFoundError(f"No existe el archivo fuente: {source_file}")
+        execution = OciExecutionContext(
+            repo_root=context.repo_root,
+            profile=args.oci_profile,
+            extra_mounts=(source_file.parent,),
+        )
         command = [
             "os",
             "object",

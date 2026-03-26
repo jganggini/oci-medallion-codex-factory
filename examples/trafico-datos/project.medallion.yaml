@@ -60,6 +60,13 @@ di_pipeline:
   workspace_name: ws-di-medallion-dev
   application: trafico-datos-orchestrator
 
+quality_profile:
+  enabled: true
+  contracts_root: workspace/migration-input/trafico-datos/quality/contracts
+  sql_checks_root: workspace/migration-input/trafico-datos/quality/sql
+  gate_before_cutover: true
+  gate_severity_threshold: high
+
 validation_rules:
   require_sql: true
   require_docs: true

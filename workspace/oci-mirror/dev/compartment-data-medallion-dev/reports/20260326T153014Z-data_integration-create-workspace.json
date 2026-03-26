@@ -1,0 +1,14 @@
+{
+  "workspace_name": "ws-di-medallion-dev",
+  "environment": "dev",
+  "created_at_utc": "20260326T153014Z",
+  "extra": {
+    "description": null,
+    "compartment_id": null,
+    "subnet_id": null,
+    "vcn_id": null,
+    "wait_for_state": [],
+    "max_wait_seconds": null,
+    "wait_interval_seconds": null
+  }
+}

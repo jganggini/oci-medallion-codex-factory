@@ -1,0 +1,18 @@
+{
+  "workspace_name": "ws-di-medallion-dev",
+  "folder_name": "Data Flow Tasks",
+  "created_at_utc": "20260326T153055Z",
+  "extra": {
+    "runtime": "oci",
+    "oci_mode": "plan",
+    "workspace_id": "ocid1.disworkspace.oc1..exampleuniqueID",
+    "identifier": "DATA_FLOW_TASKS",
+    "description": "Carpeta para tareas Data Flow del pipeline medallion",
+    "registry_metadata": {
+      "aggregatorKey": "b3b4fb2c-814f-4f14-abd6-07a3f6d3f7f3",
+      "registryVersion": 1
+    },
+    "plan_path": "D:\\dev\\oci-medallion-codex-factory\\workspace\\oci-mirror\\dev\\compartment-data-medallion-dev\\data_integration\\oci-plans\\20260326T153055Z-create-folder.json",
+    "result_path": null
+  }
+}

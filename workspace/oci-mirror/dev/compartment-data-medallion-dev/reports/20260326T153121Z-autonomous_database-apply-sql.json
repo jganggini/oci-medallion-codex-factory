@@ -1,0 +1,24 @@
+{
+  "database_name": "adb_trafico_gold",
+  "source_files": [
+    "D:\\dev\\oci_data_flow_medallon\\oci-ai\\autonomous\\sql\\010_create_bt_trf_trafico_datos.sql",
+    "D:\\dev\\oci_data_flow_medallon\\oci-ai\\autonomous\\sql\\020_create_agg_resumen_archivos_trafico.sql",
+    "D:\\dev\\oci_data_flow_medallon\\oci-ai\\autonomous\\sql\\040_create_load_agg_resumen_archivos_trafico.sql"
+  ],
+  "mirrored_files": [
+    "D:\\dev\\oci-medallion-codex-factory\\workspace\\oci-mirror\\dev\\compartment-data-medallion-dev\\autonomous_database\\adb_trafico_gold\\sql_runs\\20260326T153121Z-apply_sql\\sources\\001-010_create_bt_trf_trafico_datos.sql",
+    "D:\\dev\\oci-medallion-codex-factory\\workspace\\oci-mirror\\dev\\compartment-data-medallion-dev\\autonomous_database\\adb_trafico_gold\\sql_runs\\20260326T153121Z-apply_sql\\sources\\002-020_create_agg_resumen_archivos_trafico.sql",
+    "D:\\dev\\oci-medallion-codex-factory\\workspace\\oci-mirror\\dev\\compartment-data-medallion-dev\\autonomous_database\\adb_trafico_gold\\sql_runs\\20260326T153121Z-apply_sql\\sources\\003-040_create_load_agg_resumen_archivos_trafico.sql"
+  ],
+  "rendered_sql_path": "D:\\dev\\oci-medallion-codex-factory\\workspace\\oci-mirror\\dev\\compartment-data-medallion-dev\\autonomous_database\\adb_trafico_gold\\sql_runs\\20260326T153121Z-apply_sql\\rendered.sql",
+  "created_at_utc": "20260326T153121Z",
+  "runtime": "local",
+  "oci_mode": null,
+  "dsn": "dbclarogold_high",
+  "wallet_dir": null,
+  "connect_user": "APP_GOLD",
+  "connect_password_env": null,
+  "status": "mirrored",
+  "ignore_exists": true,
+  "source_file_count": 3
+}

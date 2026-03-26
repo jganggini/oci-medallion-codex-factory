@@ -2,14 +2,25 @@
   "workspace_name": "ws-di-medallion-dev",
   "task_name": "run-bronze-silver",
   "application_name": "bronze-to-silver",
-  "created_at_utc": "20260326T013606Z",
+  "created_at_utc": "20260326T153352Z",
   "extra": {
     "runtime": "oci",
     "oci_mode": "plan",
     "workspace_id": "ocid1.disworkspace.oc1..exampleuniqueID",
-    "folder_key": "FOLDER_001",
+    "identifier": "RUN_BRONZE_SILVER",
+    "task_key": "RUN_BRONZE_SILVER_KEY",
+    "description": null,
+    "registry_metadata": {
+      "aggregatorKey": "FOLDER_001",
+      "registryVersion": 1
+    },
+    "parent_ref": {
+      "parent": "FOLDER_001",
+      "rootDocId": "ocid1.disworkspace.oc1..exampleuniqueID"
+    },
     "application_id": "ocid1.dataflowapplication.oc1..exampleuniqueID",
-    "plan_path": "D:\\dev\\oci_data_flow_medallon\\oci-medallion-codex-factory\\workspace\\oci-mirror\\dev\\compartment-data-medallion-dev\\data_integration\\oci-plans\\20260326T013606Z-create-task-from-dataflow.json",
+    "application_compartment_id": "ocid1.compartment.oc1..exampleuniqueID",
+    "plan_path": "D:\\dev\\oci-medallion-codex-factory\\workspace\\oci-mirror\\dev\\compartment-data-medallion-dev\\data_integration\\oci-plans\\20260326T153352Z-create-task-from-dataflow.json",
     "result_path": null
   }
 }
