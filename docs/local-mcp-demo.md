@@ -17,3 +17,5 @@ Se generan artefactos en:
 - `workspace/oci-mirror/dev/.../data_integration/`
 - `workspace/oci-mirror/dev/.../autonomous_database/`
 - `workspace/oci-mirror/dev/.../reports/`
+
+Si agregas una carpeta de dependencias por job, el mismo flujo tambien puede generar el `dependency/archive.zip` oficial para Data Flow.

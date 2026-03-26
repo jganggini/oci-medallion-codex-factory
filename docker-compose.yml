@@ -20,6 +20,14 @@ services:
       - ./.local/oci:/mnt/oci
     tty: true
 
+  dataflow-packager:
+    image: ${DATAFLOW_DEPENDENCY_PACKAGER_IMAGE:-phx.ocir.io/oracle/dataflow/dependency-packager:latest}
+    working_dir: /opt/dataflow
+    volumes:
+      - ./:/workspace
+      - ./workspace/generated:/opt/dataflow
+    tty: true
+
   mcphub:
     image: samanhappy/mcphub:latest
     ports:

@@ -1,0 +1,2 @@
+# Add third-party Python dependencies here.
+# Do not include pyspark or py4j because OCI Data Flow already provides them.
