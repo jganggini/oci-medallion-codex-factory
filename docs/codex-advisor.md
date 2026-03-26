@@ -10,6 +10,7 @@ La idea no es solo ejecutar scripts. La idea es que Codex:
 - te diga que insumos faltan
 - te indique exactamente donde colocar cada archivo
 - diferencie buckets existentes de capas realmente implementadas
+- asuma por defecto una ruta completa `landing_external -> bronze_raw -> silver_trusted -> gold_refined -> gold_adb`
 - te lleve paso a paso por intake, bootstrap, publicacion, lineage, QA, validacion y reprocesos parciales
 
 ## Como pedirselo a Codex
@@ -26,11 +27,13 @@ Trabaja asi:
 1. inspecciona el repo y detecta la etapa actual
 2. hazme preguntas una por una
 3. si falta un archivo, dime exactamente en que ruta debe ir y que contenido minimo esperas
-4. pregunta si ya existe algun bucket o source asset con informacion, a que capa pertenece y si la carga se hara aparte
-5. no asumas que un bucket con datos significa que ya existen todas las capas
-6. no asumas credenciales, wallets, OCIDs ni tfvars
-7. antes de ejecutar cambios, resume el plan por etapas
-8. guiame hasta dejar el proyecto listo para desplegar, migrar, validar y reprocesar por slice
+4. asume por defecto un despliegue end-to-end hasta Autonomous Database, con entrega final en gold_adb
+5. solo pregunta por un alcance parcial si yo lo pido de forma explicita
+6. pregunta si ya existe algun bucket o source asset con informacion, a que capa pertenece y si la carga se hara aparte
+7. no asumas que un bucket con datos significa que ya existen todas las capas
+8. no asumas credenciales, wallets, OCIDs ni tfvars
+9. antes de ejecutar cambios, resume el plan por etapas
+10. guiame hasta dejar el proyecto listo para desplegar, migrar, validar y reprocesar por slice
 ```
 
 ## Modo recomendado
@@ -44,9 +47,10 @@ Trabaja asi:
 Cuando el flujo funciona bien, Codex deberia responder en este orden:
 
 1. etapa actual
-2. primer dato faltante
-3. ruta exacta donde debes colocar el insumo
-4. siguiente accion que hara cuando confirmes
+2. confirmar que la ruta objetivo por defecto llega hasta `gold_adb`, salvo restriccion explicita
+3. primer dato faltante
+4. ruta exacta donde debes colocar el insumo
+5. siguiente accion que hara cuando confirmes
 
 ## Secuencia sugerida
 

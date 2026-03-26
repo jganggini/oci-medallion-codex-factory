@@ -1,6 +1,8 @@
 project_id: sample-project
 domain: generic-domain
 environment: dev
+deployment_scope: end_to_end_gold
+delivery_target: gold_adb
 migration_input_root: workspace/migration-input/sample-project
 
 sql_sources:

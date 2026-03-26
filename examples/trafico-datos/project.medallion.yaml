@@ -1,6 +1,8 @@
 project_id: trafico-datos
 domain: trafico
 environment: dev
+deployment_scope: end_to_end_gold
+delivery_target: gold_adb
 migration_input_root: workspace/migration-input/trafico-datos
 
 sql_sources:

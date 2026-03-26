@@ -2,11 +2,13 @@
 
 Usa esta skill para publicar artefactos en el espejo OCI y dejar todo listo para una futura publicacion real.
 
+Asume publicacion end-to-end hasta `gold_adb` por defecto. Solo recorta el alcance si el manifiesto o el usuario lo indican explicitamente.
+
 ## Flujo
 
 1. crear buckets requeridos con `oci-object-storage-mcp`
 2. sincronizar buckets existentes si la carga llega por fuera del factory
-3. empaquetar aplicaciones con `oci-data-flow-mcp`
+3. empaquetar aplicaciones con `oci-data-flow-mcp`, incluyendo el loader final a `gold_adb` cuando corresponda
 4. crear workspace, proyectos, tasks y pipeline con `oci-data-integration-mcp`
 5. registrar ADB, bootstrapear `MDL_CTL`, crear usuario, aplicar DDL y registrar cargas con `oci-autonomous-database-mcp`
 6. registrar Data Catalog, assets, harvests e importar lineage cuando aplique

@@ -9,6 +9,8 @@ Cada proyecto medallion debe definir un `project.medallion.yaml`.
 - `project_id`
 - `domain`
 - `environment`
+- `deployment_scope`
+- `delivery_target`
 - `migration_input_root`
 - `sql_sources`
 - `doc_sources`
@@ -30,9 +32,12 @@ Cada proyecto medallion debe definir un `project.medallion.yaml`.
 
 ## Reglas
 
+- `deployment_scope` debe ser `end_to_end_gold` por defecto. Solo debe declararse un alcance parcial cuando el usuario o el proyecto lo pidan explicitamente.
+- `delivery_target` debe ser `gold_adb` por defecto y representar la entrega final del proyecto en Autonomous Database.
 - `migration_input_root` debe apuntar a `workspace/migration-input/<project_id>/`.
 - `sql_sources`, `doc_sources` y `sample_sources` deben ser relativos a `migration_input_root`.
 - `target_layers` debe diferenciar `landing_external`, `bronze_raw`, `silver_trusted`, `gold_refined` y `gold_adb`.
+- `target_layers.gold_adb` debe quedar en `true` cuando `deployment_scope` sea `end_to_end_gold`.
 - `existing_buckets` no puede usarse para inferir que todas las capas ya existen.
 - Cada bucket o asset existente debe indicar `layer`, `managed_by_factory` e `ingestion_outside_flow`.
 - `control_plane.database_name` debe apuntar al ADB que centraliza `workflow_id`, `run_id`, `slice_key`, checkpoints, QA y lineage outbox.
@@ -45,7 +50,7 @@ Cada proyecto medallion debe definir un `project.medallion.yaml`.
 ## Flujo
 
 1. Intake valida los insumos canonicos.
-2. El manifiesto del proyecto fija buckets existentes, assets fuente, capas objetivo y estrategia de migracion.
+2. El manifiesto del proyecto fija buckets existentes, assets fuente, capas objetivo y estrategia de migracion con ruta normal `landing_external -> bronze_raw -> silver_trusted -> gold_refined -> gold_adb`.
 3. Bootstrap crea foundation OCI y el control plane operacional en ADB.
 4. Scaffold prepara Data Flow, Data Integration, SQL y contratos de calidad.
 5. Publish registra artefactos, checkpoints, lineage y sincroniza el espejo OCI.

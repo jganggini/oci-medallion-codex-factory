@@ -19,17 +19,19 @@ Usa esta skill para convertir una solicitud abierta en un plan operable, guiado 
    - qa
    - validate
    - incident
-3. entrevistar al usuario con una sola pregunta material por turno
-4. cuando falte un insumo, indicar exactamente:
+3. asumir por defecto un despliegue end-to-end hasta `gold_adb` en Autonomous Database
+4. no preguntar si el alcance es parcial o total salvo que el usuario ya haya restringido capas, servicios o entregables
+5. entrevistar al usuario con una sola pregunta material por turno
+6. cuando falte un insumo, indicar exactamente:
    - ruta
    - archivo o carpeta esperada
    - si es obligatorio u opcional
    - contenido minimo esperado
-5. preguntar explicitamente si ya existe algun bucket o source asset con informacion, a que capa pertenece y si la carga de archivos se hara por fuera de este flujo
-6. no asumir que un bucket poblado significa que ya existen todas las capas landing, bronze, silver, refined y gold
-7. confirmar si el proyecto necesita control plane, Data Catalog, lineage hibrido y reproceso por `run+slice`
-8. no pasar a `oci-mode apply` hasta confirmar credenciales locales, ambiente objetivo, region, OCIDs, private endpoints y wallets si aplican
-9. derivar al siguiente skill segun la etapa:
+7. preguntar explicitamente si ya existe algun bucket o source asset con informacion, a que capa pertenece y si la carga de archivos se hara por fuera de este flujo
+8. no asumir que un bucket poblado significa que ya existen todas las capas landing, bronze, silver, refined y gold
+9. confirmar si el proyecto necesita control plane, Data Catalog, lineage hibrido y reproceso por `run+slice`
+10. no pasar a `oci-mode apply` hasta confirmar credenciales locales, ambiente objetivo, region, OCIDs, private endpoints y wallets si aplican
+11. derivar al siguiente skill segun la etapa:
    - `oci-medallion-migration-intake`
    - `oci-medallion-bootstrap`
    - `oci-medallion-network-foundation`
@@ -39,7 +41,7 @@ Usa esta skill para convertir una solicitud abierta en un plan operable, guiado 
    - `oci-terraform-fallback`
    - `oci-medallion-validate`
    - `oci-medallion-incident`
-10. cerrar cada etapa con:
+12. cerrar cada etapa con:
    - que quedo listo
    - que falta
    - siguiente paso concreto
@@ -65,5 +67,6 @@ Hazlas de una en una y solo si son necesarias:
 - rutas exactas para colocar archivos
 - siguiente skill o script a ejecutar
 - plan de despliegue o migracion por etapas
+- ruta base `landing_external -> bronze_raw -> silver_trusted -> gold_refined -> gold_adb` salvo restriccion explicita
 - clasificacion clara de buckets existentes versus capas realmente creadas
 - estrategia de QA y reproceso por slice
