@@ -28,6 +28,20 @@ services:
       - ./workspace/generated:/opt/dataflow
     tty: true
 
+  dataflow-local:
+    build:
+      context: .
+      dockerfile: docker/dataflow-local-runtime.Dockerfile
+    image: oci-medallion-codex-factory/dataflow-local:latest
+    working_dir: /workspace
+    volumes:
+      - ./:/workspace
+      - ./.local/oci:/mnt/oci
+      - ./.local/autonomous/wallets:/mnt/wallets
+    environment:
+      OCI_CLI_CONFIG_FILE: /mnt/oci/config
+    tty: true
+
   mcphub:
     image: samanhappy/mcphub:latest
     ports:
