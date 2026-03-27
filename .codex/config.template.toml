@@ -1,0 +1,48 @@
+# Project-scoped Codex MCP registration for this factory.
+# `setup-dev.ps1` / `setup-dev.sh` render this file to `.codex/config.toml`
+# using the Python launcher available on the host.
+# Keep this template limited to factory MCP servers only.
+
+[mcp_servers.oci_medallion_migration_intake]
+command = "__CODEX_PYTHON_COMMAND__"
+args = [__CODEX_BRIDGE_PREFIX_ARGS__, "--server", "migration-intake-mcp"]
+
+[mcp_servers.oci_medallion_iam]
+command = "__CODEX_PYTHON_COMMAND__"
+args = [__CODEX_BRIDGE_PREFIX_ARGS__, "--server", "oci-iam-mcp"]
+
+[mcp_servers.oci_medallion_network]
+command = "__CODEX_PYTHON_COMMAND__"
+args = [__CODEX_BRIDGE_PREFIX_ARGS__, "--server", "oci-network-mcp"]
+
+[mcp_servers.oci_medallion_object_storage]
+command = "__CODEX_PYTHON_COMMAND__"
+args = [__CODEX_BRIDGE_PREFIX_ARGS__, "--server", "oci-object-storage-mcp"]
+
+[mcp_servers.oci_medallion_resource_manager]
+command = "__CODEX_PYTHON_COMMAND__"
+args = [__CODEX_BRIDGE_PREFIX_ARGS__, "--server", "oci-resource-manager-mcp"]
+
+[mcp_servers.oci_medallion_data_flow]
+command = "__CODEX_PYTHON_COMMAND__"
+args = [__CODEX_BRIDGE_PREFIX_ARGS__, "--server", "oci-data-flow-mcp"]
+
+[mcp_servers.oci_medallion_data_integration]
+command = "__CODEX_PYTHON_COMMAND__"
+args = [__CODEX_BRIDGE_PREFIX_ARGS__, "--server", "oci-data-integration-mcp"]
+
+[mcp_servers.oci_medallion_autonomous_database]
+command = "__CODEX_PYTHON_COMMAND__"
+args = [__CODEX_BRIDGE_PREFIX_ARGS__, "--server", "oci-autonomous-database-mcp"]
+
+[mcp_servers.oci_medallion_data_quality]
+command = "__CODEX_PYTHON_COMMAND__"
+args = [__CODEX_BRIDGE_PREFIX_ARGS__, "--server", "oci-data-quality-mcp"]
+
+[mcp_servers.oci_medallion_data_catalog]
+command = "__CODEX_PYTHON_COMMAND__"
+args = [__CODEX_BRIDGE_PREFIX_ARGS__, "--server", "oci-data-catalog-mcp"]
+
+[mcp_servers.oci_medallion_vault]
+command = "__CODEX_PYTHON_COMMAND__"
+args = [__CODEX_BRIDGE_PREFIX_ARGS__, "--server", "oci-vault-mcp"]

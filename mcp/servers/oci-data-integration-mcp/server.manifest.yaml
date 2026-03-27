@@ -6,6 +6,10 @@ expected_tools:
   - create_workspace
   - create_project
   - create_folder
+  - create_application_from_template
+  - list_published_objects
   - create_task_from_dataflow
+  - create_task_run
+  - get_task_run
   - create_pipeline
   - collect_task_run_report

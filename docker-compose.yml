@@ -27,7 +27,7 @@ services:
       - ./.local/autonomous/wallets:/mnt/wallets
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
-      OCI_CLI_CONFIG_FILE: /workspace/.local/oci/config
+      OCI_CLI_CONFIG_FILE: /mnt/oci/config
       OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING: "True"
       HOST_REPO_ROOT: /workspace
     command: ["sleep", "infinity"]
@@ -55,11 +55,3 @@ services:
     environment:
       OCI_CLI_CONFIG_FILE: /mnt/oci/config
     tty: true
-
-  mcphub:
-    image: samanhappy/mcphub:latest
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./:/workspace
-      - ./docker/mcphub:/app/config

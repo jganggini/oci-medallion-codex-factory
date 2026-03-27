@@ -14,7 +14,7 @@ RUN apt-get update \
 COPY --from=docker_cli /usr/local/bin/docker /usr/local/bin/docker
 
 RUN python -m pip install --upgrade pip \
-    && python -m pip install oracledb
+    && python -m pip install oci-cli oracledb
 
 WORKDIR /workspace
 

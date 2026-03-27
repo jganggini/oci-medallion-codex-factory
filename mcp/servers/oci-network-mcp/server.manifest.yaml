@@ -6,4 +6,6 @@ expected_tools:
   - create_vcn
   - create_subnet
   - create_nsg
+  - create_service_gateway
   - export_network_manifest
+  - update_route_table

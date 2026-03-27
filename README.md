@@ -10,7 +10,8 @@ Este repo permite que un equipo tome SQL heredado, documentos funcionales, DDL, 
 
 - El flujo oficial es `clone-first + Docker-first`: primero clona y abre este repo localmente, luego usa el asesor o las skills dentro del repo.
 - `setup-dev.ps1`, `setup-dev.sh`, `scripts/docker_stage_assets.ps1`, `scripts/docker_stage_assets.sh`, `scripts/docker_repo_python.ps1` y `scripts/docker_repo_python.sh` son las entradas recomendadas.
-- No se requiere Python ni OCI CLI instalados en el host para el flujo normal.
+- No se requiere OCI CLI en el host.
+- Para que Codex App levante el bridge MCP local del factory si necesitas un launcher Python ligero en host: `py`, `python` o `python3`.
 - El OCI CLI real se ejecuta siempre por Docker desde `oci-runner`, tanto para simulacion local como para `oci plan` o `oci apply`.
 
 ## Zonas locales
@@ -35,7 +36,7 @@ Este repo permite que un equipo tome SQL heredado, documentos funcionales, DDL, 
 - `examples/`
   Ejemplos de proyectos medallion.
 - `docker/`
-  Imagenes base para runtime local, OCI CLI y uso futuro con MCPHub.
+  Imagenes base para runtime local, OCI CLI y Data Flow local.
 - `workspace/`
   Insumos, espejo OCI y proyectos generados.
 - `scripts/`
@@ -43,16 +44,15 @@ Este repo permite que un equipo tome SQL heredado, documentos funcionales, DDL, 
 
 ## Primer uso
 
-1. Clona el repo y abre esa carpeta local en Cursor, VS Code o Codex App. Si solo tienes el URL, primero clonalo; el asesor debe trabajar dentro del repo local para usar MCPs, skills y manifests.
+Prerequisito: Docker Desktop o Docker Engine con `docker compose` instalado y corriendo, y un launcher Python local (`py`, `python` o `python3`) para que Codex pueda arrancar los MCPs del factory.
+
+1. Clona el repo y abre esa carpeta local en Codex App, Cursor o VS Code.
 2. Ejecuta `setup-dev.ps1 -ProjectId <project_id>` o `./setup-dev.sh <project_id>`.
-3. Reune las rutas origen de SQL, scripts, data, docs, referencias, `config`, `.pem` y wallet si aplica.
-4. Ejecuta `powershell -ExecutionPolicy Bypass -File .\scripts\docker_stage_assets.ps1 --project-id <project_id> ...` o `./scripts/docker_stage_assets.sh --project-id <project_id> ...` para copiar automaticamente esos archivos a `workspace/migration-input/<project_id>/`, `.local/oci/` y `.local/autonomous/wallets/...`.
-5. Si el flujo guiado todavia no levanto el runtime base, ejecuta `docker compose up -d dev-base oci-runner dataflow-local` antes de intake, bootstrap o publish.
-6. Si quieres que Codex te guie paso a paso, empieza con `docs/codex-advisor.md` y la skill `oci-medallion-advisor`.
-7. Ejecuta el intake con `powershell -ExecutionPolicy Bypass -File .\scripts\docker_repo_python.ps1 scripts/migration_intake.py --repo-root . --project-id <project_id>` o `./scripts/docker_repo_python.sh scripts/migration_intake.py --repo-root . --project-id <project_id>`.
-8. Ajusta `project.medallion.yaml`.
-9. Usa las skills `oci-medallion-advisor`, `oci-medallion-migration-intake`, `oci-medallion-bootstrap`, `oci-medallion-scaffold`, `oci-medallion-publish`, `oci-medallion-qa` y `oci-medallion-validate`.
-10. Si Terraform o un recurso OCI no estan claros durante el despliegue, usa `oci-terraform-fallback` como referencia oficial antes de cambiar `infra/` o un MCP.
+3. Si el editor ya estaba abierto, recarga el proyecto para que tome `.codex/config.toml` y los MCP locales del factory.
+4. Empieza el flujo guiado con `docs/codex-advisor.md` o con el prompt recomendado de este README.
+5. Cuando el asesor te pida SQL, scripts, data, docs, `config`, `.pem` o wallet, ejecuta `scripts/docker_stage_assets.ps1` o `scripts/docker_stage_assets.sh` con las rutas reales. No necesitas levantar Docker ni correr intake manualmente en el primer uso salvo depuracion.
+
+Si `/mcp` muestra `No MCP servers configured`, primero verifica que abriste exactamente este repo y no una carpeta padre o auxiliar. En este proyecto la ruta correcta debe contener `.git/`, `mcp/`, `skills/`, `workspace/` y `.codex/config.toml`. Luego recarga Codex App para que vuelva a leer la configuracion local.
 
 ## Prompt recomendado para clientes
 

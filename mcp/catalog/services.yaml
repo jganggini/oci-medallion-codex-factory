@@ -7,6 +7,7 @@ servers:
     expected_tools:
       - create_compartment
       - create_group
+      - create_dynamic_group
       - create_policy
       - export_iam_manifest
 
@@ -19,7 +20,9 @@ servers:
       - create_vcn
       - create_subnet
       - create_nsg
+      - create_service_gateway
       - create_route_table
+      - update_route_table
       - export_network_manifest
 
   - name: oci-object-storage-mcp
@@ -65,7 +68,11 @@ servers:
       - create_workspace
       - create_project
       - create_folder
+      - create_application_from_template
+      - list_published_objects
       - create_task_from_dataflow
+      - create_task_run
+      - get_task_run
       - create_pipeline
       - collect_task_run_report
 
@@ -105,6 +112,9 @@ servers:
       - create_data_asset
       - create_connection
       - create_harvest_job_definition
+      - create_job
+      - create_pattern
+      - attach_data_selector_patterns
       - run_harvest_job
       - sync_di_lineage
       - import_openlineage

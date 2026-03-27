@@ -1,35 +1,46 @@
 # oci-data-integration-mcp
 
-MCP para crear workspaces, proyectos, folders, tasks Data Flow y pipelines DI en el espejo OCI o contra OCI CLI.
+MCP para orquestar OCI Data Integration en espejo local o contra OCI real usando OCI CLI sobre Docker.
 
 ## Modos
 
 - `--runtime local`
-  genera manifests y metadata en el espejo local
+  genera manifests y reportes en `workspace/oci-mirror/.../data_integration/`
 - `--runtime oci --oci-mode plan`
-  construye y registra comandos OCI CLI reales
+  registra el comando OCI CLI real sin ejecutarlo
 - `--runtime oci --oci-mode apply`
   ejecuta el comando OCI CLI real
 
 ## Capacidades
 
-- soporta `create-workspace`, `create-project`, `create-folder`, `create-task-from-dataflow` y `create-pipeline`
-- soporta `collect-task-run-report` para registrar TaskRuns y metricas operativas en el espejo local
-- permite `--description`, `--identifier`, `--aggregator-key`, `--folder-key`, `--registry-version`
-- permite `--parent-ref`, `--task-key`, `--application-compartment-id`
-- permite etiquetas y favorito con `--label` y `--favorite`
+- `create-workspace`, `create-project`, `create-folder`, `create-task-from-dataflow`, `create-pipeline`
+- `create-application-from-template`
+  clona una plantilla Oracle dentro del workspace usando `dis-application create`
+- `list-published-objects`
+  descubre los published objects de una application runtime
+- `create-task-run`, `get-task-run`
+  permite ejecutar y consultar task runs reales de DI
+- `collect-task-run-report`
+  registra TaskRuns y metricas operativas en el espejo local
 
 ## Ejemplos
 
 - crear workspace:
   `py -3 mcp/servers/oci-data-integration-mcp/server.py --environment dev --command create-workspace --workspace-name ws-di-medallion-dev`
-- crear proyecto:
-  `py -3 mcp/servers/oci-data-integration-mcp/server.py --environment dev --runtime oci --oci-mode plan --command create-project --workspace-name ws-di-medallion-dev --workspace-id ocid1.disworkspace... --project-name "Medallion Trafico Datos 2" --identifier MEDALLION_TRAFICO_DATOS_2`
-- crear folder:
-  `py -3 mcp/servers/oci-data-integration-mcp/server.py --environment dev --runtime oci --oci-mode plan --command create-folder --workspace-name ws-di-medallion-dev --workspace-id ocid1.disworkspace... --folder-name "Data Flow Tasks" --identifier DATA_FLOW_TASKS --aggregator-key <project_key>`
-- crear task desde Data Flow:
-  `py -3 mcp/servers/oci-data-integration-mcp/server.py --environment dev --runtime oci --oci-mode plan --command create-task-from-dataflow --workspace-name ws-di-medallion-dev --workspace-id ocid1.disworkspace... --task-name "Run Bronze to Silver Trafico Datos" --application-id ocid1.dataflowapplication... --application-compartment-id ocid1.compartment... --aggregator-key <project_key> --task-key RUN_BRONZE_TO_SILVER_TRAFICO_DATOS_KEY`
-- crear pipeline:
-  `py -3 mcp/servers/oci-data-integration-mcp/server.py --environment dev --command create-pipeline --workspace-name ws-di-medallion-dev --pipeline-name medallion-pipeline --task bronze-to-silver --task silver-to-gold`
-- registrar un TaskRun:
-  `py -3 mcp/servers/oci-data-integration-mcp/server.py --environment dev --command collect-task-run-report --workspace-name ws-di-medallion-dev --task-name bronze-to-silver --run-id run-001 --slice-key entity=trafico/business_date=2026-03-25/batch_id=001 --bytes-read 1000000 --bytes-written 980000`
+- clonar una template application Oracle:
+  `py -3 mcp/servers/oci-data-integration-mcp/server.py --environment dev --runtime oci --oci-mode apply --command create-application-from-template --workspace-name ws-di-medallion-dev --workspace-id ocid1.disworkspace... --application-name "Object Store Mgmt Runtime" --template-application-key a52f88e4-40da-4cd5-b2f6-34f242e2d792 --copy-type DISCONNECTED --wait-for-state ACTIVE`
+- listar published objects:
+  `py -3 mcp/servers/oci-data-integration-mcp/server.py --environment dev --runtime oci --oci-mode apply --command list-published-objects --workspace-name ws-di-medallion-dev --workspace-id ocid1.disworkspace... --application-key 3e1aa114-...`
+- crear task run desde un published object:
+  `py -3 mcp/servers/oci-data-integration-mcp/server.py --environment dev --runtime oci --oci-mode apply --command create-task-run --workspace-name ws-di-medallion-dev --workspace-id ocid1.disworkspace... --application-key 3e1aa114-... --published-object-key 91b31344-... --task-run-name create-bucket-smoke --config-binding REGION=us-chicago-1 --config-binding NAMESPACENAME=axittdqu6jz6 --config-binding COMPARTMENTID=ocid1.compartment... --config-binding BUCKET_NAME=di-smoke-001`
+- consultar task run:
+  `py -3 mcp/servers/oci-data-integration-mcp/server.py --environment dev --runtime oci --oci-mode apply --command get-task-run --workspace-name ws-di-medallion-dev --workspace-id ocid1.disworkspace... --application-key 3e1aa114-... --task-run-key 11a02e6d-...`
+
+## Hallazgo operativo importante
+
+- La template `CreateBucket` usa el binding `BUCKET_NAME`.
+- La template `DeleteBucket` usa el binding `BUCKETNAME`.
+- En workspaces DI privados, las pruebas reales mostraron que hace falta:
+  `service gateway + route rule` hacia Object Storage en la subnet privada
+- Para task runs de bucket management, la policy del workspace DI debe incluir:
+  `manage buckets` y `manage objects`, condicionada por `request.principal.type='disworkspace'`.
