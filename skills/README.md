@@ -17,14 +17,16 @@ Skills de Codex para operar el factory medallion en OCI.
 
 ## Secuencia recomendada
 
-1. advisor
-2. `docker compose up -d` despues de discovery y del plan inicial
-3. intake
-4. bootstrap
-5. network foundation
-6. scaffold
-7. publish
-8. qa
-9. terraform fallback cuando un recurso OCI no este claro, exista drift o falle el despliegue
-10. validate
-11. incident solo cuando haya fallos operativos
+1. clonar y abrir el repo local
+2. advisor
+3. `docker compose up -d dev-base oci-runner dataflow-local` despues de discovery, del plan inicial y del staging
+4. usar `scripts/docker_stage_assets.ps1` o `scripts/docker_stage_assets.sh` cuando los insumos aun esten fuera del repo
+5. intake
+6. bootstrap
+7. network foundation
+8. scaffold
+9. publish
+10. qa
+11. terraform fallback cuando un recurso OCI no este claro, exista drift o falle el despliegue
+12. validate
+13. incident solo cuando haya fallos operativos

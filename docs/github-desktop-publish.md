@@ -21,6 +21,6 @@ Usar GitHub Desktop:
 
 ## Verificaciones previas
 
-- ejecutar `py -3 scripts/validate_factory.py --repo-root .`
+- ejecutar `powershell -ExecutionPolicy Bypass -File .\scripts\docker_repo_python.ps1 scripts/validate_factory.py --repo-root .`
 - revisar que `.local/` no exista en Git
 - revisar que `workspace/oci-mirror/` solo tenga contenido redacted

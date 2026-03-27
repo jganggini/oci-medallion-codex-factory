@@ -4,7 +4,7 @@ Usa esta skill para revisar `workspace/migration-input/<project_id>/`.
 
 ## Responsabilidades
 
-- ejecutar `scripts/stage_local_assets.py` si los insumos aun estan fuera del repo
+- ejecutar `scripts/docker_stage_assets.ps1` o `scripts/docker_stage_assets.sh` si los insumos aun estan fuera del repo
 - ejecutar el inventory de insumos
 - detectar faltantes de SQL, scripts, data, docs, referencias y muestras
 - generar resumen de readiness
@@ -12,9 +12,9 @@ Usa esta skill para revisar `workspace/migration-input/<project_id>/`.
 
 ## Comando base
 
-`python scripts/migration_intake.py --repo-root . --project-id <project_id>`
+`scripts/docker_repo_python.ps1 scripts/migration_intake.py --repo-root . --project-id <project_id>` o `scripts/docker_repo_python.sh scripts/migration_intake.py --repo-root . --project-id <project_id>`
 
-Si el usuario aun no copio los archivos al repo o faltan `config`, `.pem` y wallet en `.local/`, primero ejecuta `py -3 scripts/stage_local_assets.py --repo-root . --project-id <project_id> ...`.
+Si el usuario aun no copio los archivos al repo o faltan `config`, `.pem` y wallet en `.local/`, primero ejecuta `scripts/docker_stage_assets.ps1 --project-id <project_id> ...` o `scripts/docker_stage_assets.sh --project-id <project_id> ...`.
 
 ## Salidas esperadas
 

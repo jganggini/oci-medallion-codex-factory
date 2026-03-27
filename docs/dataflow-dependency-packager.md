@@ -15,8 +15,10 @@ Usar la imagen oficial de OCI Data Flow Dependency Packager para construir el `a
 
 ## Comando
 
-`py -3 mcp/servers/oci-data-flow-mcp/server.py --environment dev --command package-dependencies --application-name bronze-to-silver --dependency-root workspace/generated/sample-project/data_flow/dependencies/bronze-to-silver`
+`powershell -ExecutionPolicy Bypass -File .\scripts\docker_repo_python.ps1 mcp/servers/oci-data-flow-mcp/server.py --repo-root . --environment dev --command package-dependencies --application-name bronze-to-silver --dependency-root workspace/generated/sample-project/data_flow/dependencies/bronze-to-silver`
 
 ## Nota
 
 El script soporta la imagen legacy `phx.ocir.io/oracle/dataflow/dependency-packager:latest` con `--use-legacy-packager-image`, pero por defecto queda listo para usar una imagen oficial por arquitectura cuando corresponda.
+
+Si trabajas en Windows, el wrapper tambien normaliza rutas del repo para evitar fallos por `\` en argumentos como `--dependency-root`.

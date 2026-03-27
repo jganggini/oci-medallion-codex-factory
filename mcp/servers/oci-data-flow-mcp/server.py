@@ -311,6 +311,7 @@ def main() -> int:
             raise SystemExit("--dependency-root es requerido para validate-archive")
         result = validate_dependency_archive(
             dependency_root=dependency_root,
+            repo_root=context.repo_root,
             python_version=args.python_version,
             image=packager_image,
             archive_name=args.archive_name,

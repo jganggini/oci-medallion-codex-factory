@@ -10,21 +10,13 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from .runtime import MirrorContext, ensure_directory, sanitize_name, utc_timestamp, write_json
+from .runtime import MirrorContext, docker_mount_source, ensure_directory, is_relative_to, sanitize_name, utc_timestamp, write_json
 
 
 OCI_IMAGE = "ghcr.io/oracle/oci-cli:latest"
 CONTAINER_REPO_ROOT = "/workspace"
 CONTAINER_OCI_DIR = "/mnt/oci"
 CONTAINER_EXTRA_ROOT = "/mnt/extra"
-
-
-def _is_relative_to(path: Path, root: Path) -> bool:
-    try:
-        path.relative_to(root)
-        return True
-    except ValueError:
-        return False
 
 
 def _to_posix(root: str, relative: Path) -> str:
@@ -159,14 +151,16 @@ def build_oci_command(execution: OciExecutionContext, args: list[str], host_oci_
         return ["oci", *args]
 
     oci_dir = (host_oci_dir or execution.host_oci_dir).resolve()
+    repo_mount_source = docker_mount_source(execution.repo_root, execution.repo_root)
+    oci_mount_source = docker_mount_source(oci_dir, execution.repo_root)
     command = [
         "docker",
         "run",
         "--rm",
         "-v",
-        f"{execution.repo_root.resolve()}:{execution.container_repo_root()}",
+        f"{repo_mount_source}:{execution.container_repo_root()}",
         "-v",
-        f"{oci_dir}:{execution.container_oci_dir()}",
+        f"{oci_mount_source}:{execution.container_oci_dir()}",
         "-w",
         execution.container_repo_root(),
         "-e",
@@ -177,7 +171,7 @@ def build_oci_command(execution: OciExecutionContext, args: list[str], host_oci_
     if execution.profile:
         command.extend(["-e", f"OCI_CLI_PROFILE={execution.profile}"])
     for index, mount_root in enumerate(execution.normalized_extra_mounts()):
-        command.extend(["-v", f"{mount_root}:{execution.container_extra_dir(index)}"])
+        command.extend(["-v", f"{docker_mount_source(mount_root, execution.repo_root)}:{execution.container_extra_dir(index)}"])
     command.extend([OCI_IMAGE, *args])
     return command
 

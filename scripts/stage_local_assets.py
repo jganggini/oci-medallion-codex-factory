@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
-from pathlib import Path
+from pathlib import Path, PurePath, PureWindowsPath
 
 
 SECTION_DESTINATIONS = {
@@ -37,23 +38,52 @@ def ensure_directory(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
-def copy_file(source: Path, target: Path, replace_existing: bool) -> dict[str, object]:
+def looks_like_windows_absolute_path(value: str) -> bool:
+    return len(value) >= 3 and value[1] == ":" and value[0].isalpha() and value[2] in ("\\", "/")
+
+
+def resolve_host_repo_root(repo_root: Path) -> Path | PurePath:
+    raw_value = os.getenv("HOST_REPO_ROOT")
+    if not raw_value:
+        return repo_root.resolve()
+    cleaned = raw_value.strip()
+    if looks_like_windows_absolute_path(cleaned):
+        return PureWindowsPath(cleaned)
+    return Path(cleaned).expanduser().resolve()
+
+
+def display_path(path: Path, repo_root: Path, host_repo_root: Path | PurePath) -> str:
+    resolved = path.resolve()
+    resolved_repo_root = repo_root.resolve()
+    try:
+        return str(host_repo_root / resolved.relative_to(resolved_repo_root))
+    except ValueError:
+        return str(resolved)
+
+
+def copy_file(source: Path, target: Path, replace_existing: bool, repo_root: Path, host_repo_root: Path | PurePath) -> dict[str, object]:
     ensure_directory(target.parent)
     if target.exists() and not replace_existing:
         return {
-            "source": str(source),
-            "target": str(target),
+            "source": display_path(source, repo_root, host_repo_root),
+            "target": display_path(target, repo_root, host_repo_root),
             "action": "skipped_existing",
         }
     shutil.copy2(source, target)
     return {
-        "source": str(source),
-        "target": str(target),
+        "source": display_path(source, repo_root, host_repo_root),
+        "target": display_path(target, repo_root, host_repo_root),
         "action": "copied",
     }
 
 
-def copy_into_directory(source: Path, target_dir: Path, replace_existing: bool) -> list[dict[str, object]]:
+def copy_into_directory(
+    source: Path,
+    target_dir: Path,
+    replace_existing: bool,
+    repo_root: Path,
+    host_repo_root: Path | PurePath,
+) -> list[dict[str, object]]:
     ensure_directory(target_dir)
     results: list[dict[str, object]] = []
 
@@ -62,17 +92,23 @@ def copy_into_directory(source: Path, target_dir: Path, replace_existing: bool) 
             if not item.is_file():
                 continue
             relative_path = item.relative_to(source)
-            results.append(copy_file(item, target_dir / relative_path, replace_existing))
+            results.append(copy_file(item, target_dir / relative_path, replace_existing, repo_root, host_repo_root))
         return results
 
-    results.append(copy_file(source, target_dir / source.name, replace_existing))
+    results.append(copy_file(source, target_dir / source.name, replace_existing, repo_root, host_repo_root))
     return results
 
 
-def copy_to_exact_path(source: Path, target: Path, replace_existing: bool) -> list[dict[str, object]]:
+def copy_to_exact_path(
+    source: Path,
+    target: Path,
+    replace_existing: bool,
+    repo_root: Path,
+    host_repo_root: Path | PurePath,
+) -> list[dict[str, object]]:
     if source.is_dir():
         raise IsADirectoryError(f"Se esperaba un archivo y se recibio un directorio: {source}")
-    return [copy_file(source, target, replace_existing)]
+    return [copy_file(source, target, replace_existing, repo_root, host_repo_root)]
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -100,6 +136,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def stage_section_sources(
     repo_root: Path,
+    host_repo_root: Path | PurePath,
     project_id: str,
     args: argparse.Namespace,
     replace_existing: bool,
@@ -121,7 +158,7 @@ def stage_section_sources(
             if not source.exists():
                 errors.append(f"No existe la ruta fuente para {section}: {source}")
                 continue
-            section_results.extend(copy_into_directory(source, destination, replace_existing))
+            section_results.extend(copy_into_directory(source, destination, replace_existing, repo_root, host_repo_root))
 
         if section_results:
             staged[section] = section_results
@@ -131,6 +168,7 @@ def stage_section_sources(
 
 def stage_local_credentials(
     repo_root: Path,
+    host_repo_root: Path | PurePath,
     args: argparse.Namespace,
     replace_existing: bool,
 ) -> tuple[dict[str, list[dict[str, object]]], list[str]]:
@@ -142,14 +180,26 @@ def stage_local_credentials(
         if not source.exists():
             errors.append(f"No existe la ruta fuente del OCI config: {source}")
         else:
-            staged["oci_config"] = copy_to_exact_path(source, repo_root / ".local" / "oci" / "config", replace_existing)
+            staged["oci_config"] = copy_to_exact_path(
+                source,
+                repo_root / ".local" / "oci" / "config",
+                replace_existing,
+                repo_root,
+                host_repo_root,
+            )
 
     if args.oci_key_source:
         source = Path(args.oci_key_source).expanduser().resolve()
         if not source.exists():
             errors.append(f"No existe la ruta fuente de la llave .pem: {source}")
         else:
-            staged["oci_key"] = copy_to_exact_path(source, repo_root / ".local" / "oci" / "key.pem", replace_existing)
+            staged["oci_key"] = copy_to_exact_path(
+                source,
+                repo_root / ".local" / "oci" / "key.pem",
+                replace_existing,
+                repo_root,
+                host_repo_root,
+            )
 
     if args.wallet_source:
         if not args.adb_name:
@@ -160,7 +210,13 @@ def stage_local_credentials(
                 errors.append(f"No existe la ruta fuente del wallet: {source}")
             else:
                 wallet_target = repo_root / ".local" / "autonomous" / "wallets" / args.environment / args.adb_name
-                staged["wallet"] = copy_into_directory(source, wallet_target, replace_existing)
+                staged["wallet"] = copy_into_directory(
+                    source,
+                    wallet_target,
+                    replace_existing,
+                    repo_root,
+                    host_repo_root,
+                )
 
     return staged, errors
 
@@ -175,12 +231,24 @@ def main() -> int:
     args = parser.parse_args()
 
     repo_root = Path(args.repo_root).resolve()
+    host_repo_root = resolve_host_repo_root(repo_root)
     project_root = repo_root / "workspace" / "migration-input" / args.project_id
     ensure_directory(project_root)
     ensure_directory(project_root / "_inventory")
 
-    staged_inputs, input_errors = stage_section_sources(repo_root, args.project_id, args, args.replace_existing)
-    staged_credentials, credential_errors = stage_local_credentials(repo_root, args, args.replace_existing)
+    staged_inputs, input_errors = stage_section_sources(
+        repo_root,
+        host_repo_root,
+        args.project_id,
+        args,
+        args.replace_existing,
+    )
+    staged_credentials, credential_errors = stage_local_credentials(
+        repo_root,
+        host_repo_root,
+        args,
+        args.replace_existing,
+    )
 
     errors = input_errors + credential_errors
     report = {
@@ -201,7 +269,7 @@ def main() -> int:
         json.dumps(
             {
                 "status": report["status"],
-                "report_path": str(report_path),
+                "report_path": display_path(report_path, repo_root, host_repo_root),
                 "errors": errors,
             }
         )

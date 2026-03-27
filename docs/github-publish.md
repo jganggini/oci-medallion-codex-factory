@@ -7,7 +7,7 @@ Publicar este repo como template repository reusable para proyectos medallion en
 ## Checklist previo
 
 1. Ejecuta `setup-dev.ps1` o `setup-dev.sh`.
-2. Ejecuta `python scripts/validate_factory.py --repo-root .`.
+2. Ejecuta `powershell -ExecutionPolicy Bypass -File .\scripts\docker_repo_python.ps1 scripts/validate_factory.py --repo-root .` o `./scripts/docker_repo_python.sh scripts/validate_factory.py --repo-root .`.
 3. Confirma que `.local/` no contiene archivos versionados.
 4. Confirma que no existen `token_keys`, wallets reales, `.env` reales ni OCIDs reales.
 5. Revisa `.github/workflows/validate-template.yml`.

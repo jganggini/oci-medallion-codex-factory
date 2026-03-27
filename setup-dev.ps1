@@ -4,29 +4,23 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$RepoRootResolved = (Resolve-Path -LiteralPath $RepoRoot).Path
 
-function Resolve-Python {
-    $candidates = @("py", "python")
-    foreach ($candidate in $candidates) {
-        $command = Get-Command $candidate -ErrorAction SilentlyContinue
-        if ($command) {
-            return $candidate
-        }
+Push-Location $RepoRootResolved
+try {
+    & docker compose up -d dev-base oci-runner dataflow-local | Out-Null
+    & "$RepoRootResolved\scripts\docker_repo_python.ps1" scripts/init_workspace.py --repo-root . --project-id $ProjectId
+    if ($LASTEXITCODE -ne 0) {
+        exit $LASTEXITCODE
     }
 
-    throw "No se encontro Python en PATH. Instala Python 3.11+ antes de ejecutar el setup."
+    & "$RepoRootResolved\scripts\docker_repo_python.ps1" scripts/validate_factory.py --repo-root .
+    if ($LASTEXITCODE -ne 0) {
+        exit $LASTEXITCODE
+    }
+}
+finally {
+    Pop-Location
 }
 
-$python = Resolve-Python
-$initScript = Join-Path $RepoRoot "scripts\init_workspace.py"
-$validateScript = Join-Path $RepoRoot "scripts\validate_factory.py"
-
-if ($python -eq "py") {
-    & py -3 $initScript --repo-root $RepoRoot --project-id $ProjectId
-    & py -3 $validateScript --repo-root $RepoRoot
-} else {
-    & python $initScript --repo-root $RepoRoot --project-id $ProjectId
-    & python $validateScript --repo-root $RepoRoot
-}
-
-Write-Host "Workspace inicializado y validado para $ProjectId"
+Write-Host "Workspace inicializado y validado para $ProjectId usando Docker"

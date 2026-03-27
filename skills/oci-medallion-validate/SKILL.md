@@ -4,7 +4,7 @@ Usa esta skill para validar contratos, artefactos, data quality y espejo OCI.
 
 ## Flujo
 
-1. ejecutar `py -3 scripts/validate_factory.py --repo-root .`
+1. ejecutar `scripts/docker_repo_python.ps1 scripts/validate_factory.py --repo-root .` o `scripts/docker_repo_python.sh scripts/validate_factory.py --repo-root .`
 2. revisar el intake y el contexto generado
 3. verificar que existan manifests en buckets, Data Flow, DI, ADB y Data Catalog
 4. validar que el control plane tenga `runs`, `steps`, `slices`, `checkpoints` y `lineage_outbox` cuando el proyecto los requiera

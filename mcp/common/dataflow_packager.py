@@ -6,7 +6,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from .runtime import MirrorContext, append_jsonl, ensure_directory, sanitize_name, utc_timestamp, write_json
+from .runtime import MirrorContext, append_jsonl, docker_mount_source, ensure_directory, sanitize_name, utc_timestamp, write_json
 
 
 AMD64_IMAGE = "phx.ocir.io/axmemlgtri2a/dataflow/dependency-packager-linux_x86_64:latest"
@@ -34,6 +34,7 @@ def default_docker_platform(target_platform: str) -> str:
 
 
 def build_packager_command(
+    repo_root: Path,
     dependency_root: Path,
     python_version: str,
     image: str,
@@ -41,6 +42,7 @@ def build_packager_command(
     validate_only: bool,
     archive_name: str,
 ) -> list[str]:
+    dependency_mount_source = docker_mount_source(dependency_root, repo_root)
     command = [
         "docker",
         "run",
@@ -48,7 +50,7 @@ def build_packager_command(
         default_docker_platform(target_platform),
         "--rm",
         "-v",
-        f"{dependency_root.resolve()}:/opt/dataflow",
+        f"{dependency_mount_source}:/opt/dataflow",
         "--pull",
         "always",
         "-i",
@@ -80,6 +82,7 @@ def package_dependency_archive(
 
     package_command = build_packager_command(
         dependency_root=dependency_root,
+        repo_root=context.repo_root,
         python_version=python_version,
         image=image,
         target_platform=target_platform,
@@ -99,6 +102,7 @@ def package_dependency_archive(
     if validate_after_build:
         validate_command = build_packager_command(
             dependency_root=dependency_root,
+            repo_root=context.repo_root,
             python_version=python_version,
             image=image,
             target_platform=target_platform,
@@ -142,6 +146,7 @@ def package_dependency_archive(
 
 def validate_dependency_archive(
     dependency_root: Path,
+    repo_root: Path,
     python_version: str = "3.11",
     image: str | None = None,
     target_platform: str | None = None,
@@ -152,6 +157,7 @@ def validate_dependency_archive(
     image = image or default_packager_image(target_platform)
     validate_command = build_packager_command(
         dependency_root=dependency_root,
+        repo_root=repo_root,
         python_version=python_version,
         image=image,
         target_platform=target_platform,

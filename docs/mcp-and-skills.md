@@ -22,6 +22,8 @@ Cada MCP debe:
 - producir manifests o reportes redacted
 - actualizar `workspace/oci-mirror/`
 - aceptar `workflow_id`, `run_id`, `slice_key` y metadatos operacionales cuando aplique
+- ejecutarse desde los wrappers Docker del repo cuando se corran localmente
+- usar OCI CLI por Docker cuando entren en `runtime oci`
 
 ## Skills
 
@@ -39,7 +41,7 @@ Cada MCP debe:
 ## Orden recomendado
 
 1. `oci-medallion-advisor`
-2. `docker compose up -d` despues de discovery y del plan inicial
+2. `docker compose up -d dev-base oci-runner dataflow-local` despues de discovery, del plan inicial y del staging
 3. `oci-medallion-migration-intake`
 4. `oci-medallion-bootstrap`
 5. `oci-medallion-network-foundation`

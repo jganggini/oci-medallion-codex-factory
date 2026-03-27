@@ -4,9 +4,14 @@ services:
       context: .
       dockerfile: docker/dev-base.Dockerfile
     image: oci-medallion-codex-factory/dev-base:latest
+    pull_policy: never
     working_dir: /workspace
     volumes:
       - ./:/workspace
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      HOST_REPO_ROOT: /workspace
+    command: ["sleep", "infinity"]
     tty: true
 
   oci-runner:
@@ -14,10 +19,18 @@ services:
       context: .
       dockerfile: docker/oci-runner.Dockerfile
     image: oci-medallion-codex-factory/oci-runner:latest
+    pull_policy: never
     working_dir: /workspace
     volumes:
       - ./:/workspace
       - ./.local/oci:/mnt/oci
+      - ./.local/autonomous/wallets:/mnt/wallets
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      OCI_CLI_CONFIG_FILE: /workspace/.local/oci/config
+      OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING: "True"
+      HOST_REPO_ROOT: /workspace
+    command: ["sleep", "infinity"]
     tty: true
 
   dataflow-packager:
@@ -33,6 +46,7 @@ services:
       context: .
       dockerfile: docker/dataflow-local-runtime.Dockerfile
     image: oci-medallion-codex-factory/dataflow-local:latest
+    pull_policy: never
     working_dir: /workspace
     volumes:
       - ./:/workspace

@@ -9,8 +9,9 @@ Usa esta skill para convertir una solicitud abierta en un plan operable, guiado 
 
 ## Flujo
 
-1. leer `AGENTS.md`, `README.md`, `docs/onboarding.md`, `docs/local-zones.md`, `docs/project-contract.md`, `docs/medallion-control-plane.md` y `skills/README.md`
-2. identificar la etapa actual:
+1. confirmar que el usuario ya clono y abrio este repo localmente; si no, pedir que primero lo clone y abra antes de seguir
+2. leer `AGENTS.md`, `README.md`, `docs/onboarding.md`, `docs/local-zones.md`, `docs/project-contract.md`, `docs/medallion-control-plane.md` y `skills/README.md`
+3. identificar la etapa actual:
    - intake
    - bootstrap
    - network foundation
@@ -19,31 +20,32 @@ Usa esta skill para convertir una solicitud abierta en un plan operable, guiado 
    - qa
    - validate
    - incident
-3. asumir por defecto un despliegue end-to-end hasta `gold_adb` en Autonomous Database
-4. no preguntar si el alcance es parcial o total salvo que el usuario ya haya restringido capas, servicios o entregables
-5. entrevistar al usuario con una sola pregunta material por turno
-6. preguntar explicitamente por estos insumos si aun no estan claros:
+4. asumir por defecto un despliegue end-to-end hasta `gold_adb` en Autonomous Database
+5. no preguntar si el alcance es parcial o total salvo que el usuario ya haya restringido capas, servicios o entregables
+6. entrevistar al usuario con una sola pregunta material por turno
+7. preguntar explicitamente por estos insumos si aun no estan claros:
    - SQL y DDL heredado
    - scripts heredados o wrappers operativos
    - data fuente, CSV, Parquet, muestras o exports
    - documentacion funcional y documentacion de referencia
-7. cuando falte un insumo, indicar exactamente:
+8. cuando falte un insumo, indicar exactamente:
    - ruta
    - archivo o carpeta esperada
    - si es obligatorio u opcional
    - contenido minimo esperado
-8. si el usuario dice que luego entregara archivos, exigir siempre:
+9. si el usuario dice que luego entregara archivos, exigir siempre:
    - `source_path` exacto donde estan hoy
    - `target_path` exacto dentro de `workspace/migration-input/<project_id>/...`, `.local/oci/` o `.local/autonomous/wallets/<env>/<adb_name>/`
    - tipo de insumo pendiente
-9. pedir explicitamente la ruta exacta de `config`, `.pem` y wallet cuando el entorno local aun no este listo
-10. si existen rutas fuente para esos archivos fuera del repo, ejecutar `py -3 scripts/stage_local_assets.py` antes de intake o bootstrap
-11. preguntar explicitamente si ya existe algun bucket o source asset con informacion, a que capa pertenece y si la carga de archivos se hara por fuera de este flujo
-12. no asumir que un bucket poblado significa que ya existen todas las capas landing, bronze, silver, refined y gold
-13. confirmar si el proyecto necesita control plane, Data Catalog, lineage hibrido y reproceso por `run+slice`
-14. despues de cerrar discovery, presentar el plan inicial y stagear los archivos locales, levantar `docker compose up -d` antes de intake, bootstrap, scaffold o publish si el runtime local todavia no esta arriba
-15. no pasar a `oci-mode apply` hasta confirmar credenciales locales, ambiente objetivo, region, OCIDs, private endpoints y wallets si aplican
-16. derivar al siguiente skill segun la etapa:
+10. pedir explicitamente la ruta exacta de `config`, `.pem` y wallet cuando el entorno local aun no este listo
+11. si existen rutas fuente para esos archivos fuera del repo, ejecutar `scripts/docker_stage_assets.ps1` o `scripts/docker_stage_assets.sh` antes de intake o bootstrap
+12. preguntar explicitamente si ya existe algun bucket o source asset con informacion, a que capa pertenece y si la carga de archivos se hara por fuera de este flujo
+13. no asumir que un bucket poblado significa que ya existen todas las capas landing, bronze, silver, refined y gold
+14. confirmar si el proyecto necesita control plane, Data Catalog, lineage hibrido y reproceso por `run+slice`
+15. despues de cerrar discovery, presentar el plan inicial, stagear los archivos locales y levantar `docker compose up -d dev-base oci-runner dataflow-local` antes de intake, bootstrap, scaffold o publish si el runtime local todavia no esta arriba
+16. ejecutar scripts del repo y runtimes MCP con `scripts/docker_repo_python.ps1` o `scripts/docker_repo_python.sh`
+17. no pasar a `oci-mode apply` hasta confirmar credenciales locales, ambiente objetivo, region, OCIDs, private endpoints y wallets si aplican
+18. derivar al siguiente skill segun la etapa:
    - `oci-medallion-migration-intake`
    - `oci-medallion-bootstrap`
    - `oci-medallion-network-foundation`
@@ -53,7 +55,7 @@ Usa esta skill para convertir una solicitud abierta en un plan operable, guiado 
    - `oci-terraform-fallback`
    - `oci-medallion-validate`
    - `oci-medallion-incident`
-17. cerrar cada etapa con:
+19. cerrar cada etapa con:
    - que quedo listo
    - que falta
    - siguiente paso concreto
@@ -83,10 +85,10 @@ Hazlas de una en una y solo si son necesarias:
 - checklist claro de insumos
 - rutas exactas para colocar archivos
 - rutas fuente y destino para cualquier insumo prometido pero aun no copiado
-- `py -3 scripts/stage_local_assets.py` ejecutado o programado antes del intake
+- `scripts/docker_stage_assets.ps1` o `scripts/docker_stage_assets.sh` ejecutado o programado antes del intake
 - siguiente skill o script a ejecutar
 - plan de despliegue o migracion por etapas
-- `docker compose up -d` programado o ejecutado inmediatamente despues del plan inicial
+- `docker compose up -d dev-base oci-runner dataflow-local` programado o ejecutado inmediatamente despues del plan inicial
 - ruta base `landing_external -> bronze_raw -> silver_trusted -> gold_refined -> gold_adb` salvo restriccion explicita
 - clasificacion clara de buckets existentes versus capas realmente creadas
 - estrategia de QA y reproceso por slice

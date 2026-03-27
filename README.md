@@ -6,6 +6,13 @@ Base reusable para construir proyectos medallion en OCI con Codex, MCPs por serv
 
 Este repo permite que un equipo tome SQL heredado, documentos funcionales, DDL, muestras de datos y exports historicos para generar un proyecto medallion en OCI sin improvisar rutas, carpetas, contratos ni mecanismos de control de ejecucion, lineage y reproceso.
 
+## Runtime Docker-first
+
+- El flujo oficial es `clone-first + Docker-first`: primero clona y abre este repo localmente, luego usa el asesor o las skills dentro del repo.
+- `setup-dev.ps1`, `setup-dev.sh`, `scripts/docker_stage_assets.ps1`, `scripts/docker_stage_assets.sh`, `scripts/docker_repo_python.ps1` y `scripts/docker_repo_python.sh` son las entradas recomendadas.
+- No se requiere Python ni OCI CLI instalados en el host para el flujo normal.
+- El OCI CLI real se ejecuta siempre por Docker desde `oci-runner`, tanto para simulacion local como para `oci plan` o `oci apply`.
+
 ## Zonas locales
 
 - `workspace/migration-input/`
@@ -36,27 +43,30 @@ Este repo permite que un equipo tome SQL heredado, documentos funcionales, DDL, 
 
 ## Primer uso
 
-1. Clona el repo.
-2. Ejecuta `setup-dev.ps1` o `setup-dev.sh`.
+1. Clona el repo y abre esa carpeta local en Cursor, VS Code o Codex App. Si solo tienes el URL, primero clonalo; el asesor debe trabajar dentro del repo local para usar MCPs, skills y manifests.
+2. Ejecuta `setup-dev.ps1 -ProjectId <project_id>` o `./setup-dev.sh <project_id>`.
 3. Reune las rutas origen de SQL, scripts, data, docs, referencias, `config`, `.pem` y wallet si aplica.
-4. Ejecuta `py -3 scripts/stage_local_assets.py --repo-root . --project-id <project_id> ...` para copiar automaticamente esos archivos a `workspace/migration-input/<project_id>/`, `.local/oci/` y `.local/autonomous/wallets/...`.
-5. Levanta Docker con `docker compose up -d`.
-6. Abre el repo con Codex App desde Cursor o VS Code.
-7. Si quieres que Codex te guie paso a paso, empieza con `docs/codex-advisor.md` y la skill `oci-medallion-advisor`.
-8. Ejecuta el intake con `python scripts/migration_intake.py --repo-root . --project-id <project_id>`.
-9. Ajusta `project.medallion.yaml`.
-10. Usa las skills `oci-medallion-advisor`, `oci-medallion-migration-intake`, `oci-medallion-bootstrap`, `oci-medallion-scaffold`, `oci-medallion-publish`, `oci-medallion-qa` y `oci-medallion-validate`.
-11. Si Terraform o un recurso OCI no estan claros durante el despliegue, usa `oci-terraform-fallback` como referencia oficial antes de cambiar `infra/` o un MCP.
+4. Ejecuta `powershell -ExecutionPolicy Bypass -File .\scripts\docker_stage_assets.ps1 --project-id <project_id> ...` o `./scripts/docker_stage_assets.sh --project-id <project_id> ...` para copiar automaticamente esos archivos a `workspace/migration-input/<project_id>/`, `.local/oci/` y `.local/autonomous/wallets/...`.
+5. Si el flujo guiado todavia no levanto el runtime base, ejecuta `docker compose up -d dev-base oci-runner dataflow-local` antes de intake, bootstrap o publish.
+6. Si quieres que Codex te guie paso a paso, empieza con `docs/codex-advisor.md` y la skill `oci-medallion-advisor`.
+7. Ejecuta el intake con `powershell -ExecutionPolicy Bypass -File .\scripts\docker_repo_python.ps1 scripts/migration_intake.py --repo-root . --project-id <project_id>` o `./scripts/docker_repo_python.sh scripts/migration_intake.py --repo-root . --project-id <project_id>`.
+8. Ajusta `project.medallion.yaml`.
+9. Usa las skills `oci-medallion-advisor`, `oci-medallion-migration-intake`, `oci-medallion-bootstrap`, `oci-medallion-scaffold`, `oci-medallion-publish`, `oci-medallion-qa` y `oci-medallion-validate`.
+10. Si Terraform o un recurso OCI no estan claros durante el despliegue, usa `oci-terraform-fallback` como referencia oficial antes de cambiar `infra/` o un MCP.
 
 ## Prompt recomendado para clientes
+
+Usa este prompt una vez que el repo ya este clonado y abierto localmente. No es buena practica empezar desde un workspace vacio con solo el link, porque ahi Codex no tendra el repo inspeccionado ni podra apoyarse bien en los MCPs, skills y manifests locales.
 
 Si quieres usar este repo como asesor guiado, pidele a Codex algo como esto:
 
 ```text
-Quiero implementar este proyecto:
+Ya tengo clonado y abierto localmente este proyecto:
 https://github.com/jganggini/oci-medallion-codex-factory
 
 Actua como asesor guiado de migracion y despliegue para una arquitectura medallion en OCI.
+
+Trabaja sobre el repo local que ya tengo abierto. Si detectas que no estoy dentro de este repo, detenme y dime que primero debo clonarlo y abrirlo localmente.
 
 Trabaja asi:
 1. inspecciona el repo y detecta la etapa actual
@@ -72,8 +82,9 @@ Trabaja asi:
 11. no asumas que un bucket con datos significa que ya existen todas las capas landing, bronze, silver, refined o gold
 12. no asumas credenciales, wallets, OCIDs ni tfvars
 13. antes de ejecutar cambios, resume el plan por etapas
-14. cuando cierres las preguntas, el plan inicial y el staging, levanta Docker con docker compose up -d antes de intake, bootstrap o publish
-15. guiame hasta dejar el proyecto listo para desplegar, migrar, validar y reprocesar por slice
+14. cuando cierres las preguntas, el plan inicial y el staging, levanta Docker con docker compose up -d dev-base oci-runner dataflow-local antes de intake, bootstrap o publish
+15. ejecuta siempre los scripts del repo, los MCPs y el OCI CLI usando Docker; no dependas de Python ni OCI CLI instalados en host
+16. guiame hasta dejar el proyecto listo para desplegar, migrar, validar y reprocesar por slice
 ```
 
 Con ese prompt, Codex deberia ayudarte a:
@@ -84,22 +95,23 @@ Con ese prompt, Codex deberia ayudarte a:
 - pedirte la ruta actual de `config`, `.pem` y wallet cuando hagan falta
 - exigir la ruta actual y la ruta destino cuando prometas entregar archivos despues
 - ejecutar el staging automatico para mover los archivos a su ubicacion correcta antes del intake
+- hacer el staging y el intake usando los wrappers Docker del repo
 - asumir que la ruta normal es `landing_external -> bronze_raw -> silver_trusted -> gold_refined -> gold_adb`
 - preguntar si ya existe algun bucket o asset con informacion y si corresponde a `landing_external`, `bronze_raw`, `silver_trusted`, `gold_refined` o `gold_adb`
 - no preguntarte si quieres un despliegue parcial o total salvo que tu mismo limites el alcance
 - no asumir que tener un bucket con datos implica que toda la arquitectura medallion ya esta creada
-- levantar Docker temprano, apenas termine discovery y el plan inicial
+- levantar Docker temprano, apenas termine discovery, el plan inicial y el staging
+- ejecutar OCI CLI siempre por Docker
 - decidir si corresponde intake, scaffold, publish, lineage, QA o validacion
 
 ## Staging automatico
 
-Usa `scripts/stage_local_assets.py` cuando los archivos todavia esten fuera del repo. El script copia automaticamente hacia la ruta canonica del proyecto y genera un reporte local en `workspace/migration-input/<project_id>/_inventory/stage-report.json`.
+Usa `scripts/docker_stage_assets.ps1` o `scripts/docker_stage_assets.sh` cuando los archivos todavia esten fuera del repo. El wrapper corre `stage_local_assets.py` dentro de `oci-runner`, copia automaticamente hacia la ruta canonica del proyecto y genera un reporte local en `workspace/migration-input/<project_id>/_inventory/stage-report.json`.
 
 Ejemplo:
 
 ```powershell
-py -3 scripts/stage_local_assets.py `
-  --repo-root . `
+powershell -ExecutionPolicy Bypass -File .\scripts\docker_stage_assets.ps1 `
   --project-id trafico-datos `
   --sql-source D:\fuentes\trafico\sql `
   --scripts-source D:\fuentes\trafico\scripts `
@@ -112,6 +124,12 @@ py -3 scripts/stage_local_assets.py `
   --environment dev `
   --adb-name adb_trafico_gold
 ```
+
+## Ejecucion de scripts y MCPs
+
+- Para correr scripts del repo usa `scripts/docker_repo_python.ps1` o `scripts/docker_repo_python.sh`.
+- Para intake, demos y runtimes locales evita `python ...` directo en host.
+- Cuando un MCP entra en `runtime oci`, el OCI CLI se invoca desde Docker y reutiliza `.local/oci/` y los wallets stageados.
 
 ## Contratos clave
 

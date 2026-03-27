@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePath, PureWindowsPath
 from typing import Any
 
 
@@ -30,6 +31,36 @@ def read_json(path: Path, default: dict[str, Any] | None = None) -> dict[str, An
 
 def sanitize_name(value: str) -> str:
     return "".join(ch if ch.isalnum() or ch in ("-", "_", ".") else "-" for ch in value)
+
+
+def is_relative_to(path: Path, root: Path) -> bool:
+    try:
+        path.relative_to(root)
+        return True
+    except ValueError:
+        return False
+
+
+def looks_like_windows_absolute_path(value: str) -> bool:
+    return len(value) >= 3 and value[1] == ":" and value[0].isalpha() and value[2] in ("\\", "/")
+
+
+def resolve_host_repo_root(repo_root: Path) -> Path | PurePath:
+    raw_value = os.getenv("HOST_REPO_ROOT")
+    if not raw_value:
+        return repo_root.resolve()
+    cleaned = raw_value.strip()
+    if looks_like_windows_absolute_path(cleaned):
+        return PureWindowsPath(cleaned)
+    return Path(cleaned).expanduser().resolve()
+
+
+def docker_mount_source(path: Path, repo_root: Path) -> Path | PurePath:
+    resolved_path = path.resolve()
+    resolved_repo_root = repo_root.resolve()
+    if is_relative_to(resolved_path, resolved_repo_root):
+        return resolve_host_repo_root(resolved_repo_root) / resolved_path.relative_to(resolved_repo_root)
+    return resolved_path
 
 
 def copy_file(source: Path, destination: Path) -> Path:

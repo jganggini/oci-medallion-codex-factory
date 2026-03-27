@@ -6,6 +6,7 @@ Usa este repo para que Codex actue como un asesor guiado de migracion y desplieg
 
 La idea no es solo ejecutar scripts. La idea es que Codex:
 
+- confirme primero que el repo ya esta clonado y abierto localmente
 - descubra en que etapa esta el proyecto
 - te diga que insumos faltan
 - te indique exactamente donde colocar cada archivo
@@ -17,13 +18,15 @@ La idea no es solo ejecutar scripts. La idea es que Codex:
 
 ## Como pedirselo a Codex
 
-Usa un prompt como este al inicio:
+Usa un prompt como este al inicio, una vez que ya abriste el repo local:
 
 ```text
-Quiero implementar este proyecto:
+Ya tengo clonado y abierto localmente este proyecto:
 https://github.com/jganggini/oci-medallion-codex-factory
 
 Actua como asesor guiado de migracion y despliegue para una arquitectura medallion en OCI.
+
+Trabaja sobre el repo local que ya tengo abierto. Si detectas que no estoy dentro de este repo, detenme y dime que primero debo clonarlo y abrirlo localmente.
 
 Trabaja asi:
 1. inspecciona el repo y detecta la etapa actual
@@ -39,8 +42,9 @@ Trabaja asi:
 11. no asumas que un bucket con datos significa que ya existen todas las capas
 12. no asumas credenciales, wallets, OCIDs ni tfvars
 13. antes de ejecutar cambios, resume el plan por etapas
-14. cuando cierres las preguntas, el plan inicial y el staging, levanta Docker con docker compose up -d antes de intake, bootstrap o publish
-15. guiame hasta dejar el proyecto listo para desplegar, migrar, validar y reprocesar por slice
+14. cuando cierres las preguntas, el plan inicial y el staging, levanta Docker con docker compose up -d dev-base oci-runner dataflow-local antes de intake, bootstrap o publish
+15. ejecuta siempre los scripts del repo, los MCPs y el OCI CLI usando Docker; no dependas de Python ni OCI CLI instalados en host
+16. guiame hasta dejar el proyecto listo para desplegar, migrar, validar y reprocesar por slice
 ```
 
 ## Modo recomendado
@@ -48,26 +52,28 @@ Trabaja asi:
 - si tu entorno tiene modo plan o tarea, usalo al inicio para discovery, entrevista y plan por etapas
 - usa modo agente o ejecucion cuando ya validaste el plan y quieres que Codex cree archivos, ajuste el repo o corra scripts
 - si solo cuentas con modo agente, funciona igual si en el prompt le pides explicitamente que primero inspeccione, pregunte una por una y no ejecute cambios todavia
+- evitar un workspace vacio con solo el link. Para aprovechar MCPs y skills del factory, primero clona el repo y abre esa carpeta
 
 ## Respuesta esperada de Codex
 
 Cuando el flujo funciona bien, Codex deberia responder en este orden:
 
-1. etapa actual
-2. confirmar que la ruta objetivo por defecto llega hasta `gold_adb`, salvo restriccion explicita
-3. pedir SQL, scripts, data y documentacion de referencia faltante
-4. pedir la ruta exacta de `config`, `.pem` y wallet cuando hagan falta
-5. si un insumo aun no fue copiado, pedir ruta fuente exacta y ruta destino exacta
-6. plan inicial por etapas
-7. ejecutar staging automatico antes del intake
-8. levantar Docker temprano antes de intake o bootstrap si todavia no esta arriba
-9. siguiente accion que hara cuando confirmes
+1. confirmar que el repo local correcto esta abierto
+2. etapa actual
+3. confirmar que la ruta objetivo por defecto llega hasta `gold_adb`, salvo restriccion explicita
+4. pedir SQL, scripts, data y documentacion de referencia faltante
+5. pedir la ruta exacta de `config`, `.pem` y wallet cuando hagan falta
+6. si un insumo aun no fue copiado, pedir ruta fuente exacta y ruta destino exacta
+7. plan inicial por etapas
+8. ejecutar staging automatico antes del intake
+9. levantar Docker temprano antes de intake o bootstrap si todavia no esta arriba
+10. siguiente accion que hara cuando confirmes
 
 ## Secuencia sugerida
 
 1. `oci-medallion-advisor`
-2. `py -3 scripts/stage_local_assets.py ...` cuando los insumos o credenciales aun estan fuera del repo
-3. `docker compose up -d` cuando termine discovery, el plan inicial y el staging
+2. `scripts/docker_stage_assets.ps1` o `scripts/docker_stage_assets.sh` cuando los insumos o credenciales aun estan fuera del repo
+3. `docker compose up -d dev-base oci-runner dataflow-local` cuando termine discovery, el plan inicial y el staging
 4. `oci-medallion-migration-intake`
 5. `oci-medallion-bootstrap`
 6. `oci-medallion-network-foundation`
@@ -82,3 +88,4 @@ Cuando el flujo funciona bien, Codex deberia responder en este orden:
 - pide guia o plan cuando aun no sabes que archivos faltan, donde van o como clasificar buckets y assets existentes
 - pide ejecucion cuando ya validaste el plan y quieres que Codex avance en el repo
 - pide `oci apply` solo cuando ya confirmaste credenciales, ambiente, control plane y recursos objetivo
+- si todavia no tienes el repo local, primero pide ayuda para clonarlo y abrirlo; luego recien usa este prompt
