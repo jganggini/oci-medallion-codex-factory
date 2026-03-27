@@ -19,11 +19,23 @@ $PathOptions = @(
     "--wallet-dir",
     "--sql-file",
     "--sql-dir",
+    "--merge-sql-file",
     "--source-file",
     "--contract-file",
     "--result-path",
     "--working-directory",
     "--config-source-file"
+)
+$PassThroughEnvVars = @(
+    "DB_USER",
+    "DB_PASSWORD",
+    "APP_GOLD_PASSWORD",
+    "MDL_CTL_PASSWORD",
+    "DB_WALLET_PASSWORD",
+    "ADW_USER",
+    "ADW_DSN",
+    "OCI_MEDALLION_MIRROR_COMPARTMENT_NAME",
+    "OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING"
 )
 
 function Convert-ToContainerRepoPath {
@@ -74,7 +86,16 @@ for ($i = 0; $i -lt $ScriptArgs.Count; $i++) {
 
 Push-Location $RepoRoot
 try {
-    & docker compose run --rm -e "HOST_REPO_ROOT=$RepoRoot" oci-runner python $ContainerScript @ContainerArgs
+    $DockerArgs = @("compose", "run", "--rm", "-e", "HOST_REPO_ROOT=$RepoRoot")
+    foreach ($envName in $PassThroughEnvVars) {
+        $envValue = [Environment]::GetEnvironmentVariable($envName)
+        if (-not [string]::IsNullOrWhiteSpace($envValue)) {
+            $DockerArgs += @("-e", "$envName=$envValue")
+        }
+    }
+    $DockerArgs += @("oci-runner", "python", $ContainerScript)
+    $DockerArgs += $ContainerArgs
+    & docker @DockerArgs
     exit $LASTEXITCODE
 }
 finally {

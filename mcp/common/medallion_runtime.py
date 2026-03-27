@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -12,6 +13,8 @@ DEFAULT_CONTROL_SCHEMA = "MDL_CTL"
 DEFAULT_CONTROL_USER = "MDL_CTL"
 DEFAULT_LINEAGE_NAMESPACE = "oci-medallion"
 DEFAULT_LINEAGE_PROVIDER = "oci-medallion-codex-factory"
+MAX_CONTROL_PATH_LENGTH = 240
+SHORT_RECORD_PREFIX_LENGTH = 96
 
 STANDARD_RUNTIME_ARG_NAMES = (
     "project_id",
@@ -124,6 +127,31 @@ def control_plane_root(context: Any, database_name: str) -> Path:
     return ensure_directory(context.service_root("autonomous_database") / sanitize_name(database_name) / "control_plane")
 
 
+def _short_record_key(record_id: str, *, fallback: str = "record") -> str:
+    sanitized = sanitize_name(record_id)
+    trimmed = sanitized[:SHORT_RECORD_PREFIX_LENGTH].rstrip("-_.")
+    if not trimmed:
+        trimmed = fallback
+    digest = hashlib.sha1(record_id.encode("utf-8")).hexdigest()[:12]
+    return f"{digest}-{trimmed}"
+
+
+def _record_path(root: Path, collection: str, record_id: str, *, suffix: str = ".json") -> Path:
+    collection_root = ensure_directory(root / collection)
+    sanitized = sanitize_name(record_id)
+    candidate = collection_root / f"{sanitized}{suffix}"
+    if len(str(candidate)) <= MAX_CONTROL_PATH_LENGTH:
+        return candidate
+
+    shortened = _short_record_key(record_id, fallback=collection.rstrip("s") or "record")
+    candidate = collection_root / f"{shortened}{suffix}"
+    if len(str(candidate)) <= MAX_CONTROL_PATH_LENGTH:
+        return candidate
+
+    digest = hashlib.sha1(record_id.encode("utf-8")).hexdigest()[:16]
+    return collection_root / f"{digest}{suffix}"
+
+
 def _merge_payload(path: Path, payload: dict[str, Any]) -> Path:
     existing = read_json(path, default={})
     now = utc_timestamp()
@@ -188,7 +216,7 @@ def register_workflow_definition(
     }
     if extra:
         payload.update(extra)
-    path = _merge_payload(root / "workflows" / f"{sanitize_name(workflow_id)}.json", payload)
+    path = _merge_payload(_record_path(root, "workflows", workflow_id), payload)
     _control_operation(root, "register_workflow_definition", payload)
     return path
 
@@ -238,7 +266,7 @@ def register_entity_definition(
     }
     if extra:
         payload.update(extra)
-    path = _merge_payload(root / "entities" / f"{sanitize_name(entity_name)}.json", payload)
+    path = _merge_payload(_record_path(root, "entities", entity_name), payload)
     _control_operation(root, "register_entity_definition", payload)
     return path
 
@@ -279,7 +307,7 @@ def register_run_state(
     }
     if extra:
         payload.update(extra)
-    path = _merge_payload(root / "runs" / f"{sanitize_name(run_id)}.json", payload)
+    path = _merge_payload(_record_path(root, "runs", run_id), payload)
     _control_operation(root, "register_run_state", payload)
     return path
 
@@ -320,7 +348,7 @@ def register_step_state(
     }
     if extra:
         payload.update(extra)
-    path = _merge_payload(root / "steps" / f"{step_id}.json", payload)
+    path = _merge_payload(_record_path(root, "steps", step_id), payload)
     _control_operation(root, "register_step_state", payload)
     return path
 
@@ -361,7 +389,7 @@ def register_slice_state(
     }
     if extra:
         payload.update(extra)
-    path = _merge_payload(root / "slices" / f"{slice_id}.json", payload)
+    path = _merge_payload(_record_path(root, "slices", slice_id), payload)
     _control_operation(root, "register_slice_state", payload)
     return path
 
@@ -396,7 +424,7 @@ def register_checkpoint(
     }
     if extra:
         payload.update(extra)
-    path = _merge_payload(root / "checkpoints" / f"{checkpoint_id}.json", payload)
+    path = _merge_payload(_record_path(root, "checkpoints", checkpoint_id), payload)
     _control_operation(root, "register_checkpoint", payload)
     return path
 
@@ -427,7 +455,7 @@ def register_reprocess_request(
     }
     if extra:
         payload.update(extra)
-    path = _merge_payload(root / "reprocess_requests" / f"{sanitize_name(request_id)}.json", payload)
+    path = _merge_payload(_record_path(root, "reprocess_requests", request_id), payload)
     _control_operation(root, "register_reprocess_request", payload)
     return path
 
@@ -459,7 +487,7 @@ def register_quality_result(
     }
     if extra:
         payload.update(extra)
-    path = _merge_payload(root / "quality_results" / f"{result_id}.json", payload)
+    path = _merge_payload(_record_path(root, "quality_results", result_id), payload)
     _control_operation(root, "register_quality_result", payload)
     return path
 
@@ -526,7 +554,7 @@ def queue_lineage_event(
     }
     if extra:
         payload.update(extra)
-    path = _merge_payload(root / "lineage_outbox" / f"{event_id}.json", payload)
+    path = _merge_payload(_record_path(root, "lineage_outbox", event_id), payload)
     _control_operation(root, "queue_lineage_event", payload)
     return path
 

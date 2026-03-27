@@ -6,6 +6,8 @@ Base reusable para construir proyectos medallion en OCI con Codex, MCPs por serv
 
 Este repo permite que un equipo tome SQL heredado, documentos funcionales, DDL, muestras de datos y exports historicos para generar un proyecto medallion en OCI sin improvisar rutas, carpetas, contratos ni mecanismos de control de ejecucion, lineage y reproceso.
 
+El modelo objetivo es plataforma compartida por ambiente: un compartment medallion por ambiente y buckets fijos por capa. Los proyectos no crean buckets propios de `landing/bronze/silver/gold`; se aislan dentro de esas capas mediante prefijos u objetos particionados.
+
 ## Runtime Docker-first
 
 - El flujo oficial es `clone-first + Docker-first`: primero clona y abre este repo localmente, luego usa el asesor o las skills dentro del repo.

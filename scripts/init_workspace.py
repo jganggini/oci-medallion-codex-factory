@@ -16,7 +16,12 @@ SERVICES = (
     "vault",
     "reports",
 )
-LAYER_BUCKETS = ("bucket-raw", "bucket-trusted", "bucket-refined")
+LAYER_BUCKETS = (
+    "bucket-landing-external",
+    "bucket-bronze-raw",
+    "bucket-silver-trusted",
+    "bucket-gold-refined",
+)
 MIGRATION_FOLDERS = ("sql", "scripts", "data", "docs", "references", "ddl", "samples", "exports", "mappings", "notes")
 
 

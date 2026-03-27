@@ -14,7 +14,7 @@ MCP para QA de datos migrados en buckets y Autonomous Database usando contratos 
 ## Comandos
 
 - perfilar datos en bucket:
-  `py -3 mcp/servers/oci-data-quality-mcp/server.py --environment dev --command profile-bucket-data --bucket-name bucket-trusted --object-glob "objects/qa/agg_resumen_archivos_trafico/*.csv" --data-format csv`
+  `py -3 mcp/servers/oci-data-quality-mcp/server.py --environment dev --command profile-bucket-data --bucket-name bucket-gold-refined --object-glob "objects/qa/agg_resumen_archivos_trafico/*.csv" --data-format csv`
 - correr un contrato:
   `py -3 mcp/servers/oci-data-quality-mcp/server.py --environment dev --command run-contract --contract-file workspace/migration-input/trafico-datos/quality/contracts/agg_resumen_archivos_trafico.contract.json`
 - generar el gate final:

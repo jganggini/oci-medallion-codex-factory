@@ -8,6 +8,8 @@
 
 `workspace/oci-mirror/<env>/compartment-data-medallion-<env>/`
 
+Ese layout representa el compartment compartido de la plataforma medallion por ambiente. Los proyectos no deben crear un compartment nuevo por cada despliegue; deben convivir dentro de esta estructura y diferenciarse por prefijos u objetos dentro de cada capa.
+
 Servicios esperados:
 
 - `iam/`
@@ -42,6 +44,9 @@ Servicios esperados:
 
 Dentro de `buckets/` deben existir como minimo:
 
-- `bucket-raw/`
-- `bucket-trusted/`
-- `bucket-refined/`
+- `bucket-landing-external/`
+- `bucket-bronze-raw/`
+- `bucket-silver-trusted/`
+- `bucket-gold-refined/`
+
+Dentro de cada bucket, los artefactos del proyecto deben quedar aislados por prefijos, por ejemplo `objects/projects/<project_id>/...`.

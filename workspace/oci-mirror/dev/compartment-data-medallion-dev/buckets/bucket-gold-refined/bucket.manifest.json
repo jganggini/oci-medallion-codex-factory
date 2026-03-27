@@ -1,0 +1,22 @@
+{
+  "bucket_name": "bucket-gold-refined",
+  "environment": "dev",
+  "created_at_utc": "20260327T032644Z",
+  "metadata": {
+    "display_name": "bucket-gold-refined",
+    "storage_tier": "Standard",
+    "layer": "gold_refined",
+    "managed_by_factory": true,
+    "ingestion_outside_flow": false,
+    "bucket_purpose": "gold",
+    "existing_state": "new",
+    "source_asset_ref": null,
+    "target_asset_ref": null,
+    "oci_mode": "plan",
+    "oci_profile": null,
+    "compartment_id": "ocid1.compartment.oc1..exampleProjectCompartment",
+    "namespace_name": "example-ns",
+    "plan_path": "/workspace/workspace/oci-mirror/dev/compartment-data-medallion-dev/buckets/oci-plans/20260327T032644Z-create-bucket.json",
+    "result_path": null
+  }
+}

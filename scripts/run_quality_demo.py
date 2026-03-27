@@ -38,7 +38,9 @@ def main() -> int:
             "--command",
             "create-bucket",
             "--bucket-name",
-            "bucket-trusted",
+            "bucket-gold-refined",
+            "--layer",
+            "gold_refined",
         ],
     )
     run_command(
@@ -52,7 +54,7 @@ def main() -> int:
             "--command",
             "upload-object",
             "--bucket-name",
-            "bucket-trusted",
+            "bucket-gold-refined",
             "--source-file",
             str(sample_csv),
         ],
@@ -119,7 +121,7 @@ def main() -> int:
             "--command",
             "profile-bucket-data",
             "--bucket-name",
-            "bucket-trusted",
+            "bucket-gold-refined",
             "--object-glob",
             "objects/agg_resumen_archivos_trafico_*.csv",
             "--data-format",

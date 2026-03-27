@@ -1,9 +1,16 @@
 {
   "bucket_name": "bucket-raw",
   "environment": "dev",
-  "created_at_utc": "20260326T153352Z",
+  "created_at_utc": "20260326T233608Z",
   "metadata": {
     "display_name": "bucket-raw",
-    "storage_tier": "Standard"
+    "storage_tier": "Standard",
+    "layer": null,
+    "managed_by_factory": true,
+    "ingestion_outside_flow": false,
+    "bucket_purpose": null,
+    "existing_state": "new",
+    "source_asset_ref": null,
+    "target_asset_ref": null
   }
 }

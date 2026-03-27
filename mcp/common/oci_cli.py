@@ -7,7 +7,7 @@ import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 from .runtime import MirrorContext, docker_mount_source, ensure_directory, is_relative_to, sanitize_name, utc_timestamp, write_json
@@ -17,6 +17,16 @@ OCI_IMAGE = "ghcr.io/oracle/oci-cli:latest"
 CONTAINER_REPO_ROOT = "/workspace"
 CONTAINER_OCI_DIR = "/mnt/oci"
 CONTAINER_EXTRA_ROOT = "/mnt/extra"
+
+
+def ensure_service_compartment_id(compartment_id: str | None, flag_name: str = "--compartment-id") -> None:
+    normalized = (compartment_id or "").strip()
+    if not normalized:
+        return
+    if normalized.startswith("ocid1.tenancy."):
+        raise SystemExit(
+            f"{flag_name} debe apuntar a un compartment OCI real; no se permite aprovisionar recursos del factory en el tenancy root."
+        )
 
 
 def _to_posix(root: str, relative: Path) -> str:
@@ -35,6 +45,12 @@ def _resolve_config_artifact(raw_value: str, source_root: Path) -> Path | None:
     cleaned = os.path.expandvars(raw_value.strip().strip("'\""))
     if not cleaned:
         return None
+
+    if len(cleaned) >= 3 and cleaned[1] == ":" and cleaned[0].isalpha() and cleaned[2] in ("\\", "/"):
+        windows_candidate = PureWindowsPath(cleaned)
+        fallback = (source_root / windows_candidate.name).resolve()
+        if fallback.exists():
+            return fallback
 
     candidate = Path(cleaned).expanduser()
     if candidate.exists():
@@ -67,6 +83,20 @@ def _prepare_host_oci_dir(execution: "OciExecutionContext") -> Path:
     parser = configparser.RawConfigParser()
     parser.optionxform = str
     parser.read(config_path, encoding="utf-8")
+
+    for option in ("key_file", "security_token_file"):
+        raw_value = parser.defaults().get(option)
+        if raw_value is None:
+            continue
+
+        artifact = _resolve_config_artifact(raw_value, source_root)
+        if artifact is None:
+            continue
+
+        target = prepared_root / artifact.name
+        if artifact.resolve() != target.resolve():
+            shutil.copy2(artifact, target)
+        parser[parser.default_section][option] = f"{CONTAINER_OCI_DIR}/{target.name}"
 
     for section in parser.sections():
         for option in ("key_file", "security_token_file"):
@@ -120,7 +150,7 @@ class OciExecutionContext:
 
         for item in self.extra_mounts:
             resolved = Path(item).resolve()
-            if _is_relative_to(resolved, repo_root) or _is_relative_to(resolved, host_oci_dir):
+            if is_relative_to(resolved, repo_root) or is_relative_to(resolved, host_oci_dir):
                 continue
             key = str(resolved).lower()
             if key in seen:
@@ -132,15 +162,15 @@ class OciExecutionContext:
     def host_to_container_path(self, path: Path) -> str:
         resolved = path.resolve()
         repo_root = self.repo_root.resolve()
-        if _is_relative_to(resolved, repo_root):
+        if is_relative_to(resolved, repo_root):
             return _to_posix(self.container_repo_root(), resolved.relative_to(repo_root))
 
         host_oci_dir = self.host_oci_dir.resolve()
-        if _is_relative_to(resolved, host_oci_dir):
+        if is_relative_to(resolved, host_oci_dir):
             return _to_posix(self.container_oci_dir(), resolved.relative_to(host_oci_dir))
 
         for index, mount_root in enumerate(self.normalized_extra_mounts()):
-            if _is_relative_to(resolved, mount_root):
+            if is_relative_to(resolved, mount_root):
                 return _to_posix(self.container_extra_dir(index), resolved.relative_to(mount_root))
 
         raise ValueError(f"La ruta {resolved} no pertenece al repo ni a los mounts extra configurados")
@@ -208,6 +238,8 @@ def execute_oci(
     if execution.use_docker:
         prepared_oci_dir = _prepare_host_oci_dir(execution)
         command = build_oci_command(execution, args, host_oci_dir=prepared_oci_dir)
+        payload["command"] = command
+        payload["command_shell"] = " ".join(_quoted_shell(item) for item in command)
     else:
         env = os.environ.copy()
         env["OCI_CLI_CONFIG_FILE"] = str(execution.host_config_file)
@@ -224,9 +256,44 @@ def execute_oci(
     payload["return_code"] = result.returncode
     payload["stdout"] = result.stdout
     payload["stderr"] = result.stderr
+    waiter_bug_tolerated = False
+    if result.returncode != 0:
+        stderr = result.stderr or ""
+        stdout = result.stdout or ""
+        if (
+            "Action completed. Waiting until the resource has entered state:" in stderr
+            and "AttributeError:" in stderr
+            and "object has no attribute 'id'" in stderr
+            and stdout.strip()
+        ):
+            try:
+                parsed_stdout = json.loads(stdout)
+            except json.JSONDecodeError:
+                parsed_stdout = None
+            if isinstance(parsed_stdout, dict):
+                waiter_bug_tolerated = True
+                payload["raw_return_code"] = result.returncode
+                payload["return_code"] = 0
+                payload["waiter_bug_tolerated"] = True
     result_path = plan_dir / f"{utc_timestamp()}-{sanitize_name(operation)}-result.json"
     write_json(result_path, payload)
-    if result.returncode != 0:
+    if result.returncode != 0 and not waiter_bug_tolerated:
         raise RuntimeError(json.dumps({"message": "OCI CLI command failed", "result_path": str(result_path)}, ensure_ascii=True))
     payload["result_path"] = str(result_path)
+    return payload
+
+
+def parse_oci_result_data(result: dict[str, Any]) -> dict[str, Any]:
+    stdout = result.get("stdout")
+    if not stdout:
+        return {}
+    try:
+        payload = json.loads(stdout)
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    data = payload.get("data")
+    if isinstance(data, dict):
+        return data
     return payload

@@ -1,8 +1,8 @@
 {
   "application_name": "demo-app",
-  "source_dir": "D:\\dev\\oci-medallion-codex-factory\\templates\\data_flow\\minimal_app",
+  "source_dir": "D:\\dev\\oci_data_flow_medallon\\oci-medallion-codex-factory\\templates\\data_flow\\minimal_app",
   "main_file": "main.py",
-  "archive_path": "D:\\dev\\oci-medallion-codex-factory\\workspace\\oci-mirror\\dev\\compartment-data-medallion-dev\\data_flow\\demo-app\\archive.zip",
+  "archive_path": "D:\\dev\\oci_data_flow_medallon\\oci-medallion-codex-factory\\workspace\\oci-mirror\\dev\\compartment-data-medallion-dev\\data_flow\\demo-app\\archive.zip",
   "archive_source_file": null,
   "application_json_path": null,
   "application_json_source_file": null,
@@ -26,7 +26,9 @@
     "wait_for_state": [],
     "max_wait_seconds": null,
     "wait_interval_seconds": null,
-    "force": false
+    "force": false,
+    "dependency_archive_path": null,
+    "dependency_manifest_path": null
   },
-  "created_at_utc": "20260326T153352Z"
+  "created_at_utc": "20260326T233608Z"
 }

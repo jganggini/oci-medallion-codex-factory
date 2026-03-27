@@ -1,9 +1,22 @@
 {
   "bucket_name": "bucket-trusted",
   "environment": "dev",
-  "created_at_utc": "20260326T155152Z",
+  "created_at_utc": "20260326T233608Z",
   "metadata": {
     "display_name": "bucket-trusted",
-    "storage_tier": "Standard"
+    "storage_tier": "Standard",
+    "layer": null,
+    "managed_by_factory": true,
+    "ingestion_outside_flow": false,
+    "bucket_purpose": null,
+    "existing_state": "new",
+    "source_asset_ref": null,
+    "target_asset_ref": null,
+    "oci_mode": "plan",
+    "oci_profile": null,
+    "compartment_id": "ocid1.compartment.oc1..exampleuniqueID",
+    "namespace_name": null,
+    "plan_path": "D:\\dev\\oci_data_flow_medallon\\oci-medallion-codex-factory\\workspace\\oci-mirror\\dev\\compartment-data-medallion-dev\\buckets\\oci-plans\\20260326T233608Z-create-bucket.json",
+    "result_path": null
   }
 }

@@ -4,11 +4,12 @@ import argparse
 import csv
 import json
 import os
+import re
 import sys
 from collections import Counter
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 
@@ -18,7 +19,15 @@ if str(REPO_ROOT_DEFAULT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT_DEFAULT))
 
 from mcp.common.medallion_runtime import add_standard_runtime_args, record_control_runtime, register_quality_result, runtime_payload_from_args
-from mcp.common.runtime import MirrorContext, append_jsonl, ensure_directory, sanitize_name, utc_timestamp, write_json
+from mcp.common.runtime import (
+    MirrorContext,
+    append_jsonl,
+    ensure_directory,
+    looks_like_windows_absolute_path,
+    sanitize_name,
+    utc_timestamp,
+    write_json,
+)
 
 
 SEVERITY_ORDER = {
@@ -74,13 +83,34 @@ def resolve_secret(explicit: str | None, env_name: str | None, fallback_envs: tu
     return None
 
 
+HASHED_OBJECT_PATTERN = re.compile(r"^[0-9a-f]{12}-(?P<basename>.+)$", re.IGNORECASE)
+
+
+def map_host_repo_path(repo_root: Path, path_value: str) -> Path | None:
+    host_repo_root = os.getenv("HOST_REPO_ROOT", "").strip()
+    if not host_repo_root or not looks_like_windows_absolute_path(host_repo_root) or not looks_like_windows_absolute_path(path_value):
+        return None
+    try:
+        relative = PureWindowsPath(path_value).relative_to(PureWindowsPath(host_repo_root))
+    except ValueError:
+        return None
+    return (repo_root / Path(*relative.parts)).resolve()
+
+
 def resolve_path(repo_root: Path, base_dir: Path, path_value: str, label: str) -> Path:
+    mapped_host_path = map_host_repo_path(repo_root, path_value)
+    if mapped_host_path is not None and mapped_host_path.exists():
+        return mapped_host_path
+
     candidate = Path(path_value)
     if candidate.is_absolute():
         resolved = candidate.resolve()
     else:
         relative = (base_dir / candidate).resolve()
-        resolved = relative if relative.exists() else (repo_root / candidate).resolve()
+        repo_candidate = (repo_root / candidate).resolve()
+        resolved = relative if relative.exists() else repo_candidate
+        if not resolved.exists() and mapped_host_path is not None:
+            resolved = mapped_host_path
     if not resolved.exists():
         raise FileNotFoundError(f"No existe {label}: {resolved}")
     return resolved
@@ -140,6 +170,28 @@ def load_bucket_dataset(context: MirrorContext, target_name: str, target: dict[s
     object_glob = target.get("object_glob", "objects/**/*")
     bucket_root = context.bucket_root(bucket_name)
     matched_files = sorted(item for item in bucket_root.glob(object_glob) if item.is_file())
+    objects_root = bucket_root / "objects"
+    structured_shadow_names: set[str] = set()
+    for item in matched_files:
+        try:
+            relative = item.relative_to(objects_root)
+        except ValueError:
+            continue
+        if len(relative.parts) > 1:
+            structured_shadow_names.add(item.name)
+
+    filtered_files: list[Path] = []
+    for item in matched_files:
+        try:
+            relative = item.relative_to(objects_root)
+        except ValueError:
+            filtered_files.append(item)
+            continue
+        match = HASHED_OBJECT_PATTERN.match(relative.name) if len(relative.parts) == 1 else None
+        if match is not None and match.group("basename") in structured_shadow_names:
+            continue
+        filtered_files.append(item)
+    matched_files = filtered_files
     data_format = infer_data_format(matched_files[0], target.get("data_format")) if matched_files else (target.get("data_format", "auto").lower())
 
     total_bytes = sum(item.stat().st_size for item in matched_files)
@@ -406,7 +458,7 @@ def execute_sql_check(
     if not connect_password:
         if connect_user.upper() == admin_user.upper():
             connect_password = admin_password
-        elif default_connect_user and connect_user.upper() == default_connect_user.upper():
+        elif default_connect_user and connect_user.upper() == default_connect_user.upper() and default_connect_password:
             connect_password = default_connect_password
         elif connect_user.upper() == database_user.upper():
             connect_password = database_password

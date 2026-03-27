@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import sys
 from pathlib import Path
@@ -13,10 +14,13 @@ if str(REPO_ROOT_DEFAULT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT_DEFAULT))
 
 from mcp.common.local_services import (
+    attach_data_catalog_patterns,
     collect_data_catalog_lineage_report,
     create_data_catalog_connection,
+    create_data_catalog_job,
     create_data_catalog_job_definition,
     create_data_catalog_manifest,
+    create_data_catalog_pattern,
     create_data_catalog_private_endpoint,
     import_openlineage_payload,
     register_data_catalog_asset,
@@ -24,7 +28,7 @@ from mcp.common.local_services import (
     sync_di_lineage,
 )
 from mcp.common.medallion_runtime import add_standard_runtime_args, record_control_runtime, runtime_payload_from_args
-from mcp.common.oci_cli import OciExecutionContext, execute_oci
+from mcp.common.oci_cli import OciExecutionContext, ensure_service_compartment_id, execute_oci, parse_oci_result_data
 from mcp.common.runtime import MirrorContext, sanitize_name
 
 
@@ -53,6 +57,22 @@ def add_wait_options(command: list[str], wait_for_state: list[str], max_wait_sec
         command.extend(["--max-wait-seconds", str(max_wait_seconds)])
     if wait_interval_seconds is not None:
         command.extend(["--wait-interval-seconds", str(wait_interval_seconds)])
+
+
+def extract_work_request_resource_identifier(oci_data: dict[str, Any], *entity_types: str) -> str | None:
+    expected = {item.strip().lower() for item in entity_types if item}
+    resources = oci_data.get("resources")
+    if not isinstance(resources, list):
+        return None
+    for item in resources:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("entity-type", "")).strip().lower() not in expected:
+            continue
+        identifier = item.get("identifier")
+        if identifier:
+            return str(identifier)
+    return None
 
 
 def load_lineage_payload(args: argparse.Namespace) -> tuple[str, dict[str, Any], dict[str, Any]]:
@@ -94,7 +114,10 @@ def summarize_lineage(context: MirrorContext, control_database_name: str | None)
 
     if imports_dir.exists():
         for item in sorted(imports_dir.glob("*.json")):
-            payload = json.loads(item.read_text(encoding="utf-8"))
+            try:
+                payload = json.loads(item.read_text(encoding="utf-8"))
+            except (FileNotFoundError, json.JSONDecodeError):
+                continue
             report["imports"].append(
                 {
                     "path": str(item),
@@ -107,7 +130,10 @@ def summarize_lineage(context: MirrorContext, control_database_name: str | None)
         outbox_dir = context.service_root("autonomous_database") / sanitize_name(control_database_name) / "control_plane" / "lineage_outbox"
         if outbox_dir.exists():
             for item in sorted(outbox_dir.glob("*.json")):
-                payload = json.loads(item.read_text(encoding="utf-8"))
+                try:
+                    payload = json.loads(item.read_text(encoding="utf-8"))
+                except (FileNotFoundError, json.JSONDecodeError):
+                    continue
                 report["outbox"].append(
                     {
                         "path": str(item),
@@ -140,6 +166,9 @@ def main() -> int:
             "create-data-asset",
             "create-connection",
             "create-harvest-job-definition",
+            "create-job",
+            "create-pattern",
+            "attach-data-selector-patterns",
             "run-harvest-job",
             "sync-di-lineage",
             "import-openlineage",
@@ -167,6 +196,11 @@ def main() -> int:
     parser.add_argument("--job-definition-key")
     parser.add_argument("--job-type", default="HARVEST")
     parser.add_argument("--job-properties-json")
+    parser.add_argument("--pattern-name")
+    parser.add_argument("--pattern-key", action="append", default=[])
+    parser.add_argument("--pattern-expression")
+    parser.add_argument("--pattern-file-path-prefix")
+    parser.add_argument("--pattern-description")
     parser.add_argument("--workspace-name")
     parser.add_argument("--lineage-file")
     parser.add_argument("--from-outbox-file")
@@ -192,6 +226,7 @@ def main() -> int:
         if args.command == "create-catalog":
             if not args.compartment_id:
                 raise SystemExit("--compartment-id es requerido para create-catalog en runtime oci")
+            ensure_service_compartment_id(args.compartment_id)
             command = [
                 "data-catalog",
                 "catalog",
@@ -203,6 +238,8 @@ def main() -> int:
             ]
             add_wait_options(command, args.wait_for_state, args.max_wait_seconds, args.wait_interval_seconds)
             result = execute_oci(execution, "data_catalog", context, "create-catalog", command, args.oci_mode)
+            oci_data = parse_oci_result_data(result)
+            catalog_id = extract_work_request_resource_identifier(oci_data, "catalog", "datacatalog") or oci_data.get("id")
             manifest = create_data_catalog_manifest(
                 context,
                 args.catalog_name,
@@ -210,6 +247,9 @@ def main() -> int:
                     "runtime": "oci",
                     "oci_mode": args.oci_mode,
                     "compartment_id": args.compartment_id,
+                    "catalog_id": catalog_id,
+                    "work_request_id": oci_data.get("id") if str(oci_data.get("id", "")).startswith("ocid1.coreservicesworkrequest.") else None,
+                    "lifecycle_state": oci_data.get("lifecycle-state") or oci_data.get("status"),
                     "plan_path": result.get("plan_path"),
                     "result_path": result.get("result_path"),
                 },
@@ -220,9 +260,21 @@ def main() -> int:
                 "data_catalog",
                 "create_catalog",
                 "applied" if args.oci_mode == "apply" else "planned",
-                extra={"catalog_manifest": str(manifest)},
+                extra={"catalog_manifest": str(manifest), "catalog_id": catalog_id},
             )
-            print(json.dumps({"status": "ok", "catalog_manifest": str(manifest), "control_paths": control_paths}, indent=2, ensure_ascii=True))
+            print(
+                json.dumps(
+                    {
+                        "status": "ok",
+                        "catalog_manifest": str(manifest),
+                        "catalog_id": catalog_id,
+                        "lifecycle_state": oci_data.get("lifecycle-state") or oci_data.get("status"),
+                        "control_paths": control_paths,
+                    },
+                    indent=2,
+                    ensure_ascii=True,
+                )
+            )
             return 0
 
         if args.command == "create-private-endpoint":
@@ -243,6 +295,7 @@ def main() -> int:
                 command.extend(["--dns-zones", json.dumps(args.dns_zone, ensure_ascii=True)])
             add_wait_options(command, args.wait_for_state, args.max_wait_seconds, args.wait_interval_seconds)
             result = execute_oci(execution, "data_catalog", context, "create-private-endpoint", command, args.oci_mode)
+            oci_data = parse_oci_result_data(result)
             manifest = create_data_catalog_private_endpoint(
                 context,
                 args.private_endpoint_name,
@@ -252,6 +305,8 @@ def main() -> int:
                     "catalog_id": args.catalog_id,
                     "subnet_id": args.subnet_id,
                     "vcn_id": args.vcn_id,
+                    "private_endpoint_id": oci_data.get("id"),
+                    "lifecycle_state": oci_data.get("lifecycle-state"),
                     "dns_zones": args.dns_zone,
                     "plan_path": result.get("plan_path"),
                     "result_path": result.get("result_path"),
@@ -263,9 +318,21 @@ def main() -> int:
                 "data_catalog",
                 "create_private_endpoint",
                 "applied" if args.oci_mode == "apply" else "planned",
-                extra={"private_endpoint_manifest": str(manifest)},
+                extra={"private_endpoint_manifest": str(manifest), "private_endpoint_id": oci_data.get("id")},
             )
-            print(json.dumps({"status": "ok", "private_endpoint_manifest": str(manifest), "control_paths": control_paths}, indent=2, ensure_ascii=True))
+            print(
+                json.dumps(
+                    {
+                        "status": "ok",
+                        "private_endpoint_manifest": str(manifest),
+                        "private_endpoint_id": oci_data.get("id"),
+                        "lifecycle_state": oci_data.get("lifecycle-state"),
+                        "control_paths": control_paths,
+                    },
+                    indent=2,
+                    ensure_ascii=True,
+                )
+            )
             return 0
 
         if args.command == "create-data-asset":
@@ -280,6 +347,7 @@ def main() -> int:
                     command.extend(["--properties", json.dumps(asset_properties, ensure_ascii=True)])
             add_wait_options(command, args.wait_for_state, args.max_wait_seconds, args.wait_interval_seconds)
             result = execute_oci(execution, "data_catalog", context, "create-data-asset", command, args.oci_mode)
+            oci_data = parse_oci_result_data(result)
             manifest = register_data_catalog_asset(
                 context,
                 args.asset_name,
@@ -287,9 +355,11 @@ def main() -> int:
                     "runtime": "oci",
                     "oci_mode": args.oci_mode,
                     "catalog_id": args.catalog_id,
+                    "data_asset_key": oci_data.get("key"),
                     "asset_type_key": args.asset_type_key,
                     "asset_properties": asset_properties,
                     "private_endpoint_id": args.private_endpoint_id,
+                    "lifecycle_state": oci_data.get("lifecycle-state"),
                     "plan_path": result.get("plan_path"),
                     "result_path": result.get("result_path"),
                 },
@@ -300,9 +370,21 @@ def main() -> int:
                 "data_catalog",
                 "create_data_asset",
                 "applied" if args.oci_mode == "apply" else "planned",
-                extra={"asset_manifest": str(manifest)},
+                extra={"asset_manifest": str(manifest), "data_asset_key": oci_data.get("key")},
             )
-            print(json.dumps({"status": "ok", "asset_manifest": str(manifest), "control_paths": control_paths}, indent=2, ensure_ascii=True))
+            print(
+                json.dumps(
+                    {
+                        "status": "ok",
+                        "asset_manifest": str(manifest),
+                        "data_asset_key": oci_data.get("key"),
+                        "lifecycle_state": oci_data.get("lifecycle-state"),
+                        "control_paths": control_paths,
+                    },
+                    indent=2,
+                    ensure_ascii=True,
+                )
+            )
             return 0
 
         if args.command == "create-connection":
@@ -328,6 +410,7 @@ def main() -> int:
                     command.extend(["--catalog-private-endpoint-id", args.private_endpoint_id])
             add_wait_options(command, args.wait_for_state, args.max_wait_seconds, args.wait_interval_seconds)
             result = execute_oci(execution, "data_catalog", context, "create-connection", command, args.oci_mode)
+            oci_data = parse_oci_result_data(result)
             manifest = create_data_catalog_connection(
                 context,
                 args.connection_name,
@@ -336,9 +419,11 @@ def main() -> int:
                     "oci_mode": args.oci_mode,
                     "catalog_id": args.catalog_id,
                     "data_asset_key": args.data_asset_key,
+                    "connection_key": oci_data.get("key"),
                     "connection_type_key": args.connection_type_key,
                     "connection_properties": connection_properties,
                     "private_endpoint_id": args.private_endpoint_id,
+                    "lifecycle_state": oci_data.get("lifecycle-state"),
                     "plan_path": result.get("plan_path"),
                     "result_path": result.get("result_path"),
                 },
@@ -349,9 +434,21 @@ def main() -> int:
                 "data_catalog",
                 "create_connection",
                 "applied" if args.oci_mode == "apply" else "planned",
-                extra={"connection_manifest": str(manifest)},
+                extra={"connection_manifest": str(manifest), "connection_key": oci_data.get("key")},
             )
-            print(json.dumps({"status": "ok", "connection_manifest": str(manifest), "control_paths": control_paths}, indent=2, ensure_ascii=True))
+            print(
+                json.dumps(
+                    {
+                        "status": "ok",
+                        "connection_manifest": str(manifest),
+                        "connection_key": oci_data.get("key"),
+                        "lifecycle_state": oci_data.get("lifecycle-state"),
+                        "control_paths": control_paths,
+                    },
+                    indent=2,
+                    ensure_ascii=True,
+                )
+            )
             return 0
 
         if args.command == "create-harvest-job-definition":
@@ -370,6 +467,7 @@ def main() -> int:
                     command.extend(["--properties", json.dumps(job_properties, ensure_ascii=True)])
             add_wait_options(command, args.wait_for_state, args.max_wait_seconds, args.wait_interval_seconds)
             result = execute_oci(execution, "data_catalog", context, "create-harvest-job-definition", command, args.oci_mode)
+            oci_data = parse_oci_result_data(result)
             manifest = create_data_catalog_job_definition(
                 context,
                 args.job_name,
@@ -377,10 +475,12 @@ def main() -> int:
                     "runtime": "oci",
                     "oci_mode": args.oci_mode,
                     "catalog_id": args.catalog_id,
+                    "job_definition_key": oci_data.get("key"),
                     "job_type": args.job_type,
                     "connection_key": args.connection_key,
                     "data_asset_key": args.data_asset_key,
                     "job_properties": job_properties,
+                    "lifecycle_state": oci_data.get("lifecycle-state"),
                     "plan_path": result.get("plan_path"),
                     "result_path": result.get("result_path"),
                 },
@@ -391,21 +491,264 @@ def main() -> int:
                 "data_catalog",
                 "create_harvest_job_definition",
                 "applied" if args.oci_mode == "apply" else "planned",
-                extra={"job_definition_manifest": str(manifest)},
+                extra={"job_definition_manifest": str(manifest), "job_definition_key": oci_data.get("key")},
             )
-            print(json.dumps({"status": "ok", "job_definition_manifest": str(manifest), "control_paths": control_paths}, indent=2, ensure_ascii=True))
+            print(
+                json.dumps(
+                    {
+                        "status": "ok",
+                        "job_definition_manifest": str(manifest),
+                        "job_definition_key": oci_data.get("key"),
+                        "lifecycle_state": oci_data.get("lifecycle-state"),
+                        "control_paths": control_paths,
+                    },
+                    indent=2,
+                    ensure_ascii=True,
+                )
+            )
+            return 0
+
+        if args.command == "create-job":
+            if not args.catalog_id or not args.job_name or not args.job_definition_key:
+                raise SystemExit("--catalog-id, --job-name y --job-definition-key son requeridos para create-job en runtime oci")
+            command = ["data-catalog", "job", "create", "--catalog-id", args.catalog_id]
+            if from_json_file is not None:
+                command.extend(["--from-json", f"file://{execution.host_to_container_path(from_json_file)}"])
+            else:
+                command.extend(
+                    [
+                        "--display-name",
+                        args.job_name,
+                        "--job-definition-key",
+                        args.job_definition_key,
+                    ]
+                )
+                if args.connection_key:
+                    command.extend(["--connection-key", args.connection_key])
+            add_wait_options(command, args.wait_for_state, args.max_wait_seconds, args.wait_interval_seconds)
+            result = execute_oci(execution, "data_catalog", context, "create-job", command, args.oci_mode)
+            oci_data = parse_oci_result_data(result)
+            manifest = create_data_catalog_job(
+                context,
+                args.job_name,
+                {
+                    "runtime": "oci",
+                    "oci_mode": args.oci_mode,
+                    "catalog_id": args.catalog_id,
+                    "job_key": oci_data.get("key"),
+                    "job_definition_key": args.job_definition_key,
+                    "connection_key": args.connection_key,
+                    "lifecycle_state": oci_data.get("lifecycle-state"),
+                    "plan_path": result.get("plan_path"),
+                    "result_path": result.get("result_path"),
+                },
+            )
+            control_paths = record_control_runtime(
+                context,
+                runtime_payload,
+                "data_catalog",
+                "create_job",
+                "applied" if args.oci_mode == "apply" else "planned",
+                extra={"job_manifest": str(manifest), "job_key": oci_data.get("key")},
+            )
+            print(
+                json.dumps(
+                    {
+                        "status": "ok",
+                        "job_manifest": str(manifest),
+                        "job_key": oci_data.get("key"),
+                        "lifecycle_state": oci_data.get("lifecycle-state"),
+                        "control_paths": control_paths,
+                    },
+                    indent=2,
+                    ensure_ascii=True,
+                )
+            )
+            return 0
+
+        if args.command == "create-pattern":
+            if not args.catalog_id or not args.pattern_name:
+                raise SystemExit("--catalog-id y --pattern-name son requeridos para create-pattern en runtime oci")
+            if not from_json_file and not args.pattern_expression and not args.pattern_file_path_prefix:
+                raise SystemExit("--pattern-expression o --pattern-file-path-prefix son requeridos para create-pattern en runtime oci")
+            command = ["data-catalog", "pattern", "create", "--catalog-id", args.catalog_id]
+            if from_json_file is not None:
+                command.extend(["--from-json", f"file://{execution.host_to_container_path(from_json_file)}"])
+            else:
+                command.extend(["--display-name", args.pattern_name])
+                if args.pattern_description:
+                    command.extend(["--description", args.pattern_description])
+                if args.pattern_expression:
+                    command.extend(["--expression", args.pattern_expression])
+                if args.pattern_file_path_prefix:
+                    command.extend(["--file-path-prefix", args.pattern_file_path_prefix])
+            add_wait_options(command, args.wait_for_state, args.max_wait_seconds, args.wait_interval_seconds)
+            result = execute_oci(execution, "data_catalog", context, "create-pattern", command, args.oci_mode)
+            oci_data = parse_oci_result_data(result)
+            manifest = create_data_catalog_pattern(
+                context,
+                args.pattern_name,
+                {
+                    "runtime": "oci",
+                    "oci_mode": args.oci_mode,
+                    "catalog_id": args.catalog_id,
+                    "pattern_key": oci_data.get("key"),
+                    "pattern_expression": args.pattern_expression,
+                    "pattern_file_path_prefix": args.pattern_file_path_prefix,
+                    "lifecycle_state": oci_data.get("lifecycle-state"),
+                    "plan_path": result.get("plan_path"),
+                    "result_path": result.get("result_path"),
+                },
+            )
+            control_paths = record_control_runtime(
+                context,
+                runtime_payload,
+                "data_catalog",
+                "create_pattern",
+                "applied" if args.oci_mode == "apply" else "planned",
+                extra={"pattern_manifest": str(manifest), "pattern_key": oci_data.get("key")},
+            )
+            print(
+                json.dumps(
+                    {
+                        "status": "ok",
+                        "pattern_manifest": str(manifest),
+                        "pattern_key": oci_data.get("key"),
+                        "lifecycle_state": oci_data.get("lifecycle-state"),
+                        "control_paths": control_paths,
+                    },
+                    indent=2,
+                    ensure_ascii=True,
+                )
+            )
+            return 0
+
+        if args.command == "attach-data-selector-patterns":
+            if not args.catalog_id or not args.data_asset_key or not args.pattern_key:
+                raise SystemExit("--catalog-id, --data-asset-key y al menos un --pattern-key son requeridos para attach-data-selector-patterns en runtime oci")
+            command = [
+                "data-catalog",
+                "data-asset",
+                "add-data-selector-patterns",
+                "--catalog-id",
+                args.catalog_id,
+                "--data-asset-key",
+                args.data_asset_key,
+                "--items",
+                json.dumps(args.pattern_key, ensure_ascii=True),
+            ]
+            add_wait_options(command, args.wait_for_state, args.max_wait_seconds, args.wait_interval_seconds)
+            result = execute_oci(execution, "data_catalog", context, "attach-data-selector-patterns", command, args.oci_mode)
+            oci_data = parse_oci_result_data(result)
+            manifest = attach_data_catalog_patterns(
+                context,
+                args.asset_name or args.data_asset_key,
+                {
+                    "runtime": "oci",
+                    "oci_mode": args.oci_mode,
+                    "catalog_id": args.catalog_id,
+                    "data_asset_key": args.data_asset_key,
+                    "pattern_keys": args.pattern_key,
+                    "lifecycle_state": oci_data.get("lifecycle-state"),
+                    "plan_path": result.get("plan_path"),
+                    "result_path": result.get("result_path"),
+                },
+            )
+            control_paths = record_control_runtime(
+                context,
+                runtime_payload,
+                "data_catalog",
+                "attach_data_selector_patterns",
+                "applied" if args.oci_mode == "apply" else "planned",
+                extra={"attachment_manifest": str(manifest), "data_asset_key": args.data_asset_key, "pattern_keys": args.pattern_key},
+            )
+            print(
+                json.dumps(
+                    {
+                        "status": "ok",
+                        "attachment_manifest": str(manifest),
+                        "data_asset_key": args.data_asset_key,
+                        "pattern_keys": args.pattern_key,
+                        "control_paths": control_paths,
+                    },
+                    indent=2,
+                    ensure_ascii=True,
+                )
+            )
             return 0
 
         if args.command in ("run-harvest-job", "sync-di-lineage"):
             if not args.catalog_id or not (args.job_key or args.job_definition_key):
                 raise SystemExit("--catalog-id y --job-key/--job-definition-key son requeridos para run-harvest-job o sync-di-lineage en runtime oci")
-            command = ["data-catalog", "job-execution", "create", "--catalog-id", args.catalog_id]
-            if args.job_key:
-                command.extend(["--job-key", args.job_key])
-            if args.job_definition_key:
-                command.extend(["--job-definition-key", args.job_definition_key])
+            job_key = args.job_key
+            created_job_manifest: Path | None = None
+            if not job_key and args.job_definition_key:
+                derived_job_name = args.job_name or f"{args.workspace_name or args.command}-job"
+                create_job_command = [
+                    "data-catalog",
+                    "job",
+                    "create",
+                    "--catalog-id",
+                    args.catalog_id,
+                    "--display-name",
+                    derived_job_name,
+                    "--job-definition-key",
+                    args.job_definition_key,
+                ]
+                if args.connection_key:
+                    create_job_command.extend(["--connection-key", args.connection_key])
+                create_job_result = execute_oci(execution, "data_catalog", context, "create-job", create_job_command, args.oci_mode)
+                create_job_oci_data = parse_oci_result_data(create_job_result)
+                job_key = create_job_oci_data.get("key")
+                created_job_manifest = create_data_catalog_job(
+                    context,
+                    derived_job_name,
+                    {
+                        "runtime": "oci",
+                        "oci_mode": args.oci_mode,
+                        "catalog_id": args.catalog_id,
+                        "job_key": job_key,
+                        "job_definition_key": args.job_definition_key,
+                        "connection_key": args.connection_key,
+                        "lifecycle_state": create_job_oci_data.get("lifecycle-state"),
+                        "plan_path": create_job_result.get("plan_path"),
+                        "result_path": create_job_result.get("result_path"),
+                        "created_for_command": args.command,
+                    },
+                )
+            if not job_key:
+                raise SystemExit("No se pudo resolver --job-key para ejecutar el harvest.")
+            command = ["data-catalog", "job-execution", "create", "--catalog-id", args.catalog_id, "--job-key", job_key]
             add_wait_options(command, args.wait_for_state, args.max_wait_seconds, args.wait_interval_seconds)
             result = execute_oci(execution, "data_catalog", context, args.command, command, args.oci_mode)
+            oci_data = parse_oci_result_data(result)
+            job_execution_id = oci_data.get("id") or oci_data.get("key")
+            job_execution_state = oci_data.get("lifecycle-state")
+            job_execution_error_code = oci_data.get("error-code")
+            job_execution_error_message = oci_data.get("error-message")
+            if args.oci_mode == "apply" and job_execution_id:
+                status_result = execute_oci(
+                    execution,
+                    "data_catalog",
+                    context,
+                    f"{args.command}-status",
+                    [
+                        "data-catalog",
+                        "job-execution",
+                        "get",
+                        "--catalog-id",
+                        args.catalog_id,
+                        "--job-key",
+                        job_key,
+                        "--job-execution-key",
+                        str(job_execution_id),
+                    ],
+                    "apply",
+                )
+                status_data = parse_oci_result_data(status_result)
+                job_execution_state = status_data.get("lifecycle-state") or job_execution_state
+                job_execution_error_code = status_data.get("error-code") or job_execution_error_code
+                job_execution_error_message = status_data.get("error-message") or job_execution_error_message
             manifest = run_data_catalog_job(
                 context,
                 args.job_name or args.workspace_name or args.command,
@@ -413,13 +756,32 @@ def main() -> int:
                     "runtime": "oci",
                     "oci_mode": args.oci_mode,
                     "catalog_id": args.catalog_id,
-                    "job_key": args.job_key,
+                    "job_execution_id": job_execution_id,
+                    "job_key": job_key,
                     "job_definition_key": args.job_definition_key,
                     "workspace_name": args.workspace_name,
+                    "created_job_manifest": str(created_job_manifest) if created_job_manifest else None,
+                    "lifecycle_state": job_execution_state,
+                    "error_code": job_execution_error_code,
+                    "error_message": job_execution_error_message,
                     "plan_path": result.get("plan_path"),
                     "result_path": result.get("result_path"),
                 },
             )
+            if str(job_execution_state).upper() == "FAILED":
+                raise RuntimeError(
+                    json.dumps(
+                        {
+                            "message": "El job execution de Data Catalog termino en FAILED",
+                            "job_key": job_key,
+                            "job_execution_id": job_execution_id,
+                            "error_code": job_execution_error_code,
+                            "error_message": job_execution_error_message,
+                            "job_manifest": str(manifest),
+                        },
+                        ensure_ascii=True,
+                    )
+                )
             if args.command == "sync-di-lineage" and args.workspace_name:
                 sync_manifest = sync_di_lineage(
                     context,
@@ -442,6 +804,7 @@ def main() -> int:
                 "applied" if args.oci_mode == "apply" else "planned",
                 extra={
                     "job_manifest": str(manifest),
+                    "job_execution_id": job_execution_id,
                     "sync_manifest": str(sync_manifest) if sync_manifest else None,
                 },
             )
@@ -450,6 +813,9 @@ def main() -> int:
                     {
                         "status": "ok",
                         "job_manifest": str(manifest),
+                        "job_key": job_key,
+                        "job_execution_id": job_execution_id,
+                        "lifecycle_state": job_execution_state,
                         "sync_manifest": str(sync_manifest) if sync_manifest else None,
                         "control_paths": control_paths,
                     },
@@ -463,6 +829,9 @@ def main() -> int:
             if not args.catalog_id or not args.data_asset_key:
                 raise SystemExit("--catalog-id y --data-asset-key son requeridos para import-openlineage en runtime oci")
             lineage_name, payload, metadata = load_lineage_payload(args)
+            payload_base64 = base64.b64encode(
+                json.dumps(payload, ensure_ascii=True, separators=(",", ":")).encode("utf-8")
+            ).decode("ascii")
             command = [
                 "data-catalog",
                 "data-asset",
@@ -471,10 +840,11 @@ def main() -> int:
                 args.catalog_id,
                 "--data-asset-key",
                 args.data_asset_key,
-                "--open-lineage-command-body",
-                json.dumps(payload, ensure_ascii=True),
+                "--lineage-payload",
+                payload_base64,
             ]
             result = execute_oci(execution, "data_catalog", context, "import-openlineage", command, args.oci_mode)
+            oci_data = parse_oci_result_data(result)
             manifest = import_openlineage_payload(
                 context,
                 args.lineage_name or lineage_name,
@@ -485,6 +855,7 @@ def main() -> int:
                     "oci_mode": args.oci_mode,
                     "catalog_id": args.catalog_id,
                     "data_asset_key": args.data_asset_key,
+                    "import_status": oci_data.get("lifecycle-state") or oci_data.get("status"),
                     "plan_path": result.get("plan_path"),
                     "result_path": result.get("result_path"),
                 },
@@ -574,6 +945,54 @@ def main() -> int:
         )
         control_paths = record_control_runtime(context, runtime_payload, "data_catalog", "create_harvest_job_definition", "mirrored", extra={"job_definition_manifest": str(manifest)})
         print(json.dumps({"status": "ok", "job_definition_manifest": str(manifest), "control_paths": control_paths}, indent=2, ensure_ascii=True))
+        return 0
+
+    if args.command == "create-job":
+        if not args.job_name:
+            raise SystemExit("--job-name es requerido para create-job")
+        manifest = create_data_catalog_job(
+            context,
+            args.job_name,
+            {
+                "catalog_id": args.catalog_id,
+                "job_definition_key": args.job_definition_key,
+                "connection_key": args.connection_key,
+            },
+        )
+        control_paths = record_control_runtime(context, runtime_payload, "data_catalog", "create_job", "mirrored", extra={"job_manifest": str(manifest)})
+        print(json.dumps({"status": "ok", "job_manifest": str(manifest), "control_paths": control_paths}, indent=2, ensure_ascii=True))
+        return 0
+
+    if args.command == "create-pattern":
+        if not args.pattern_name:
+            raise SystemExit("--pattern-name es requerido para create-pattern")
+        manifest = create_data_catalog_pattern(
+            context,
+            args.pattern_name,
+            {
+                "catalog_id": args.catalog_id,
+                "pattern_expression": args.pattern_expression,
+                "pattern_file_path_prefix": args.pattern_file_path_prefix,
+            },
+        )
+        control_paths = record_control_runtime(context, runtime_payload, "data_catalog", "create_pattern", "mirrored", extra={"pattern_manifest": str(manifest)})
+        print(json.dumps({"status": "ok", "pattern_manifest": str(manifest), "control_paths": control_paths}, indent=2, ensure_ascii=True))
+        return 0
+
+    if args.command == "attach-data-selector-patterns":
+        if not args.pattern_key:
+            raise SystemExit("Debes informar al menos un --pattern-key para attach-data-selector-patterns")
+        manifest = attach_data_catalog_patterns(
+            context,
+            args.asset_name or args.data_asset_key or "data-asset",
+            {
+                "catalog_id": args.catalog_id,
+                "data_asset_key": args.data_asset_key,
+                "pattern_keys": args.pattern_key,
+            },
+        )
+        control_paths = record_control_runtime(context, runtime_payload, "data_catalog", "attach_data_selector_patterns", "mirrored", extra={"attachment_manifest": str(manifest)})
+        print(json.dumps({"status": "ok", "attachment_manifest": str(manifest), "control_paths": control_paths}, indent=2, ensure_ascii=True))
         return 0
 
     if args.command == "run-harvest-job":

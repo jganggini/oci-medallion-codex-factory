@@ -20,3 +20,5 @@ workspace/generated/
 dist/
 build/
 .DS_Store
+.test
+.tmp_oci_cli

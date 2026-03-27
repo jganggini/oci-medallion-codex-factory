@@ -27,6 +27,17 @@ sample_sources:
 reference_doc_sources:
   - references/
 
+provisioning_order:
+  - compartment
+  - iam_policies
+  - storage_layers
+  - autonomous
+  - network
+  - landing_ingestion
+  - data_flow
+  - data_integration
+  - validation
+
 pending_input_deliveries: []
 
 target_layers:
@@ -52,9 +63,74 @@ source_assets:
     managed_by_factory: false
     ingestion_outside_flow: true
 
+iam_baseline:
+  enabled: true
+  operator_group_name: grp-medallion-operators-dev
+  dataflow_admin_group_name: grp-dataflow-admin-dev
+  workspace_ocid: ocid1.disworkspace.oc1..replace-me
+  catalog_ocid: ocid1.datacatalog.oc1..replace-me
+  dynamic_groups:
+    autonomous_resource_principal:
+      name: dg-adb-resource-principal-dev
+      matching_rule: ALL {resource.type = 'autonomousdatabase', resource.compartment.id = 'ocid1.compartment.oc1..replace-me'}
+    data_catalog_harvest:
+      name: dg-data-catalog-harvest-dev
+      matching_rule: Any {resource.id = 'ocid1.datacatalog.oc1..replace-me'}
+  policy_bundles:
+    operators:
+      name: plc-medallion-operators-dev
+      statements:
+        - Allow group grp-medallion-operators-dev to inspect compartments in tenancy
+        - Allow group grp-medallion-operators-dev to manage buckets in compartment data-medallion-dev
+        - Allow group grp-medallion-operators-dev to manage objects in compartment data-medallion-dev
+        - Allow group grp-medallion-operators-dev to manage autonomous-database-family in compartment data-medallion-dev
+        - Allow group grp-medallion-operators-dev to use virtual-network-family in compartment data-medallion-dev
+        - Allow group grp-medallion-operators-dev to manage dataflow-family in compartment data-medallion-dev
+        - Allow group grp-medallion-operators-dev to manage dis-family in compartment data-medallion-dev
+        - Allow group grp-medallion-operators-dev to manage data-catalog-family in compartment data-medallion-dev
+        - Allow group grp-medallion-operators-dev to manage data-catalog-private-endpoints in compartment data-medallion-dev
+        - Allow group grp-medallion-operators-dev to manage vaults in compartment data-medallion-dev
+        - Allow group grp-medallion-operators-dev to manage secret-family in compartment data-medallion-dev
+        - Allow group grp-medallion-operators-dev to read log-groups in compartment data-medallion-dev
+        - Allow group grp-medallion-operators-dev to read log-content in compartment data-medallion-dev
+        - Allow group grp-medallion-operators-dev to manage work-requests in compartment data-medallion-dev
+    dataflow_private_access:
+      name: plc-dataflow-admin-dev
+      statements:
+        - Allow group grp-dataflow-admin-dev to inspect compartments in tenancy
+        - Allow group grp-dataflow-admin-dev to manage dataflow-family in compartment data-medallion-dev
+        - Allow group grp-dataflow-admin-dev to manage dataflow-private-endpoints in compartment data-medallion-dev
+        - Allow group grp-dataflow-admin-dev to use virtual-network-family in compartment data-medallion-dev
+        - Allow group grp-dataflow-admin-dev to read objectstorage-namespaces in tenancy
+        - Allow group grp-dataflow-admin-dev to read buckets in compartment data-medallion-dev
+        - Allow group grp-dataflow-admin-dev to manage objects in compartment data-medallion-dev
+        - Allow group grp-dataflow-admin-dev to read log-groups in compartment data-medallion-dev
+        - Allow group grp-dataflow-admin-dev to use log-content in compartment data-medallion-dev
+    adb_resource_principal:
+      name: plc-adb-resource-principal-dev
+      statements:
+        - Allow dynamic-group dg-adb-resource-principal-dev to read object-family in compartment data-medallion-dev
+        - Allow dynamic-group dg-adb-resource-principal-dev to read secret-family in compartment data-medallion-dev
+        - Allow dynamic-group dg-adb-resource-principal-dev to use key-delegate-family in compartment data-medallion-dev
+    data_integration_workspace:
+      name: plc-di-workspace-runtime-dev
+      statements:
+        - Allow any-user to use virtual-network-family in compartment data-medallion-dev where all {request.principal.type='disworkspace', request.principal.id='ocid1.disworkspace.oc1..replace-me'}
+        - Allow any-user to use secret-family in compartment data-medallion-dev where all {request.principal.type='disworkspace', request.principal.id='ocid1.disworkspace.oc1..replace-me'}
+        - Allow any-user to read secret-bundles in compartment data-medallion-dev where all {request.principal.type='disworkspace', request.principal.id='ocid1.disworkspace.oc1..replace-me'}
+        - Allow any-user to read objectstorage-namespaces in compartment data-medallion-dev where all {request.principal.type='disworkspace', request.principal.id='ocid1.disworkspace.oc1..replace-me'}
+        - Allow any-user to manage objects in compartment data-medallion-dev where all {request.principal.type='disworkspace', request.principal.id='ocid1.disworkspace.oc1..replace-me'}
+    data_catalog_harvest:
+      name: plc-data-catalog-harvest-dev
+      statements:
+        - Allow dynamic-group dg-data-catalog-harvest-dev to read object-family in compartment data-medallion-dev
+        - Allow dynamic-group dg-data-catalog-harvest-dev to read dis-workspaces-lineage in compartment data-medallion-dev
+        - Allow any-user to manage data-catalog-data-assets in compartment data-medallion-dev where all {request.principal.type='dataflowrun', target.catalog.id='ocid1.datacatalog.oc1..replace-me', target.resource.kind='dataFlow'}
+
 network_profile:
   compartment_strategy: by-environment
   compartment_name: data-medallion-dev
+  compartment_id: ocid1.compartment.oc1..replace-me
   vcn_name: vcn-data-medallion-dev
   subnet_strategy: private-by-service
   private_endpoints:
@@ -124,6 +200,10 @@ dataflow_jobs:
   - name: gold_loader
     enabled: true
     target: gold_adb
+    delivery_mode: bucket_to_adb
+    source_layer: gold_refined
+    file_uri_template: oci://bucket-gold-refined@namespace/projects/sample-project/exports/agg_sample_resumen/process_date={business_date}/*.csv
+    load_procedure: APP_GOLD.LOAD_AGG_SAMPLE_RESUMEN
 
 di_pipeline:
   enabled: true

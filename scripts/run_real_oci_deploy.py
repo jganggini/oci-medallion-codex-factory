@@ -88,6 +88,7 @@ class DeployNames:
     namespace: str
     tenancy_id: str
     compartment_name: str
+    project_prefix: str
     operator_group_name: str
     dataflow_admin_group_name: str
     adb_dynamic_group_name: str
@@ -127,6 +128,10 @@ class DeployNames:
     slice_key: str
     quality_contract_name: str
     gold_object_name: str
+    landing_root_uri: str
+    bronze_root_uri: str
+    silver_root_uri: str
+    gold_root_uri: str
     gold_source_uri: str
 
 
@@ -451,16 +456,74 @@ def wait_for_bucket_exists(repo_root: Path, bucket_name: str, namespace: str, ti
         time.sleep(10)
 
 
+def get_bucket_if_exists(repo_root: Path, bucket_name: str, namespace: str) -> dict[str, Any] | None:
+    try:
+        payload = run_oci_cli_json(
+            repo_root,
+            ["os", "bucket", "get", "--bucket-name", bucket_name, "--namespace-name", namespace],
+            timeout_seconds=120,
+        )
+    except CommandError as exc:
+        if "BucketNotFound" in exc.stderr or '"status": 404' in exc.stderr:
+            return None
+        raise
+    data = payload.get("data", {})
+    return data or None
+
+
+def find_compartment_by_name(repo_root: Path, parent_compartment_id: str, compartment_name: str) -> dict[str, Any] | None:
+    payload = run_oci_cli_json(
+        repo_root,
+        [
+            "iam",
+            "compartment",
+            "list",
+            "--compartment-id",
+            parent_compartment_id,
+            "--compartment-id-in-subtree",
+            "true",
+            "--access-level",
+            "ACCESSIBLE",
+            "--all",
+        ],
+        timeout_seconds=180,
+    )
+    matches: list[dict[str, Any]] = []
+    for item in payload.get("data", []):
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("name", "")).strip() != compartment_name:
+            continue
+        if str(item.get("lifecycle-state", "")).upper() == "DELETED":
+            continue
+        matches.append(item)
+    if not matches:
+        return None
+    direct_children = [item for item in matches if str(item.get("compartment-id", "")).strip() == parent_compartment_id]
+    selected = direct_children[0] if direct_children else matches[0]
+    return selected
+
+
 def build_names(repo_root: Path, project_id: str, environment: str, region: str, namespace: str, tenancy_id: str, tag: str) -> DeployNames:
     suffix = f"{environment}-{tag}"
-    compartment_name = f"data-medallion-trafico-{suffix}"
+    project_slug = sanitize_token(project_id)
+    compartment_name = f"data-medallion-{environment}"
     database_name = f"adb_trafico_{tag}"
     adb_db_name = f"TD{tag.upper()[:8]}"
     workspace_name = f"ws-trafico-{suffix}"
     catalog_name = f"dc-trafico-{suffix}"
     wallet_dir = repo_root / ".local" / "autonomous" / "wallets" / environment / database_name
     dns_label = ("trf" + tag[:9]).lower()[:15]
-    gold_object_name = "exports/agg_resumen_archivos_trafico/process_date=2026-03-26/agg_resumen_archivos_trafico_sample.csv"
+    project_prefix = f"projects/{project_slug}"
+    gold_object_name = f"{project_prefix}/exports/agg_resumen_archivos_trafico/process_date=2026-03-26/agg_resumen_archivos_trafico_sample.csv"
+    landing_bucket = "bucket-landing-external"
+    bronze_bucket = "bucket-bronze-raw"
+    silver_bucket = "bucket-silver-trusted"
+    gold_bucket = "bucket-gold-refined"
+    landing_root_uri = f"oci://{landing_bucket}@{namespace}/{project_prefix}/"
+    bronze_root_uri = f"oci://{bronze_bucket}@{namespace}/{project_prefix}/"
+    silver_root_uri = f"oci://{silver_bucket}@{namespace}/{project_prefix}/"
+    gold_root_uri = f"oci://{gold_bucket}@{namespace}/{project_prefix}/"
     return DeployNames(
         project_id=project_id,
         tag=tag,
@@ -469,6 +532,7 @@ def build_names(repo_root: Path, project_id: str, environment: str, region: str,
         namespace=namespace,
         tenancy_id=tenancy_id,
         compartment_name=compartment_name,
+        project_prefix=project_prefix,
         operator_group_name=f"grp-trafico-operators-{suffix}",
         dataflow_admin_group_name=f"grp-trafico-dataflow-{suffix}",
         adb_dynamic_group_name=f"dg-trafico-adb-{suffix}",
@@ -479,10 +543,10 @@ def build_names(repo_root: Path, project_id: str, environment: str, region: str,
         adb_policy_name=f"plc-trafico-adb-{suffix}",
         di_policy_name=f"plc-trafico-di-{suffix}",
         catalog_policy_name=f"plc-trafico-catalog-{suffix}",
-        landing_bucket=f"trafico-landing-{suffix}",
-        bronze_bucket=f"trafico-bronze-{suffix}",
-        silver_bucket=f"trafico-silver-{suffix}",
-        gold_bucket=f"trafico-gold-{suffix}",
+        landing_bucket=landing_bucket,
+        bronze_bucket=bronze_bucket,
+        silver_bucket=silver_bucket,
+        gold_bucket=gold_bucket,
         database_name=database_name,
         database_user="APP_GOLD",
         control_schema="MDL_CTL",
@@ -508,7 +572,11 @@ def build_names(repo_root: Path, project_id: str, environment: str, region: str,
         slice_key=f"entity=agg_resumen_archivos_trafico/business_date={DEFAULT_BUSINESS_DATE}/batch_id={DEFAULT_BATCH_ID}",
         quality_contract_name="agg_resumen_archivos_trafico_gold",
         gold_object_name=gold_object_name,
-        gold_source_uri=f"oci://trafico-gold-{suffix}@{namespace}/{gold_object_name}",
+        landing_root_uri=landing_root_uri,
+        bronze_root_uri=bronze_root_uri,
+        silver_root_uri=silver_root_uri,
+        gold_root_uri=gold_root_uri,
+        gold_source_uri=f"oci://{gold_bucket}@{namespace}/{gold_object_name}",
     )
 
 
@@ -581,7 +649,7 @@ def data_catalog_policy_statements(compartment_name: str, dynamic_group_name: st
     ]
 
 
-def collect_landing_samples(data_root: Path) -> list[tuple[Path, str]]:
+def collect_landing_samples(data_root: Path, project_prefix: str) -> list[tuple[Path, str]]:
     selected: list[tuple[Path, str]] = []
     for top_level in sorted(item for item in data_root.iterdir() if item.is_dir()):
         files = sorted(item for item in top_level.rglob("*") if item.is_file())
@@ -591,7 +659,7 @@ def collect_landing_samples(data_root: Path) -> list[tuple[Path, str]]:
         for source_file in chosen_files:
             entity = normalize_entity_name(source_file.stem if top_level.name.upper() == "LK" else top_level.name)
             object_name = (
-                f"source_system=trafico/entity={entity}/business_date={DEFAULT_BUSINESS_DATE}/batch_id={DEFAULT_BATCH_ID}/"
+                f"{project_prefix}/source_system=trafico/entity={entity}/business_date={DEFAULT_BUSINESS_DATE}/batch_id={DEFAULT_BATCH_ID}/"
                 f"{source_file.name}"
             )
             selected.append((source_file, object_name))
@@ -642,7 +710,7 @@ def write_quality_assets(project_root: Path, names: DeployNames) -> dict[str, st
             {
                 "target_name": "gold_sample",
                 "bucket_name": names.gold_bucket,
-                "object_glob": "objects/**/*agg_resumen_archivos_trafico*.csv",
+                "object_glob": f"objects/{names.project_prefix}/**/*agg_resumen_archivos_trafico*.csv",
                 "data_format": "csv",
             }
         ],
@@ -912,7 +980,7 @@ def render_manifest(names: DeployNames, *, compartment_id: str, workspace_id: st
             type: object_storage
             exists: true
             layer: landing_external
-            uri: oci://{names.landing_bucket}@{names.namespace}/source_system=trafico/
+            uri: {names.landing_root_uri}source_system=trafico/
             managed_by_factory: true
             ingestion_outside_flow: false
 
@@ -931,7 +999,7 @@ def render_manifest(names: DeployNames, *, compartment_id: str, workspace_id: st
               matching_rule: Any {{resource.id = '{catalog_id}'}}
 
         network_profile:
-          compartment_strategy: by-project
+          compartment_strategy: by-environment
           compartment_name: {names.compartment_name}
           compartment_id: {compartment_id}
           vcn_name: {names.vcn_name}
@@ -1420,9 +1488,33 @@ def main() -> int:
         quality_assets = record_step("write_quality_assets", lambda: write_quality_assets(project_root, names))
         artifacts.update(quality_assets)
 
-        create_compartment_result = record_step(
-            "create_project_compartment",
-            lambda: call_mcp_json(
+        def ensure_platform_compartment() -> dict[str, Any]:
+            existing = find_compartment_by_name(repo_root, names.tenancy_id, names.compartment_name)
+            if existing:
+                manifest_result = call_mcp_json(
+                    repo_root,
+                    "oci-iam-mcp",
+                    [
+                        "--environment",
+                        names.environment,
+                        "--command",
+                        "create-compartment",
+                        "--compartment-name",
+                        names.compartment_name,
+                        "--parent-compartment-id",
+                        names.tenancy_id,
+                        "--description",
+                        f"Shared medallion platform compartment for {names.environment}",
+                    ],
+                    timeout_seconds=300,
+                )
+                return {
+                    **manifest_result,
+                    "compartment_id": existing.get("id"),
+                    "lifecycle_state": existing.get("lifecycle-state"),
+                    "reused_existing": True,
+                }
+            return call_mcp_json(
                 repo_root,
                 "oci-iam-mcp",
                 [
@@ -1439,15 +1531,16 @@ def main() -> int:
                     "--parent-compartment-id",
                     names.tenancy_id,
                     "--description",
-                    f"Project compartment for {names.project_id}",
+                    f"Shared medallion platform compartment for {names.environment}",
                 ],
                 timeout_seconds=900,
-            ),
-        )
+            )
+
+        create_compartment_result = record_step("ensure_platform_compartment", ensure_platform_compartment)
         ids["compartment_id"] = create_compartment_result["compartment_id"]
 
         wait_compartment_result = record_step(
-            "wait_project_compartment_active",
+            "wait_platform_compartment_active",
             lambda: wait_for_compartment_state(repo_root, ids["compartment_id"]),
         )
         ids["compartment_state"] = wait_compartment_result.get("lifecycle-state")
@@ -1559,35 +1652,40 @@ def main() -> int:
                 (names.silver_bucket, "silver_trusted", "silver"),
                 (names.gold_bucket, "gold_refined", "gold"),
             ):
+                existing_bucket = get_bucket_if_exists(repo_root, bucket_name, names.namespace)
+                command = [
+                    "--environment",
+                    names.environment,
+                    "--runtime",
+                    "oci",
+                    "--oci-mode",
+                    "apply",
+                    "--command",
+                    "sync-bucket-manifest" if existing_bucket else "create-bucket",
+                    "--bucket-name",
+                    bucket_name,
+                    "--compartment-id",
+                    ids["compartment_id"],
+                    "--namespace-name",
+                    names.namespace,
+                    "--layer",
+                    layer,
+                    "--bucket-purpose",
+                    purpose,
+                    "--managed-by-factory",
+                    "true",
+                    "--ingestion-outside-flow",
+                    "false",
+                    "--existing-state",
+                    "existing" if existing_bucket else "new",
+                ]
                 results[bucket_name] = call_mcp_json(
                     repo_root,
                     "oci-object-storage-mcp",
-                    [
-                        "--environment",
-                        names.environment,
-                        "--runtime",
-                        "oci",
-                        "--oci-mode",
-                        "apply",
-                        "--command",
-                        "create-bucket",
-                        "--bucket-name",
-                        bucket_name,
-                        "--compartment-id",
-                        ids["compartment_id"],
-                        "--namespace-name",
-                        names.namespace,
-                        "--layer",
-                        layer,
-                        "--bucket-purpose",
-                        purpose,
-                        "--managed-by-factory",
-                        "true",
-                        "--ingestion-outside-flow",
-                        "false",
-                    ],
+                    command,
                     timeout_seconds=600,
                 )
+                results[bucket_name]["reused_existing"] = bool(existing_bucket)
             return results
 
         record_step("create_storage_layers", create_buckets)
@@ -1606,7 +1704,7 @@ def main() -> int:
 
         def upload_landing_samples() -> dict[str, Any]:
             uploads: list[dict[str, Any]] = []
-            for source_file, object_name in collect_landing_samples(test_root / "data"):
+            for source_file, object_name in collect_landing_samples(test_root / "data", names.project_prefix):
                 result = retry(
                     f"upload landing sample {object_name}",
                     lambda source_file=source_file, object_name=object_name: call_mcp_json(
@@ -2026,7 +2124,7 @@ def main() -> int:
             results: dict[str, Any] = {}
             source_file = repo_root / "templates" / "data_flow" / "minimal_app" / "main.py"
             for app in dataflow_apps:
-                object_name = f"apps/{app['application_name']}/main.py"
+                object_name = f"{names.project_prefix}/apps/{app['application_name']}/main.py"
                 results[app["application_name"]] = retry(
                     f"upload dataflow source {app['application_name']}",
                     lambda object_name=object_name: call_mcp_json(
@@ -2062,10 +2160,10 @@ def main() -> int:
 
         def create_and_run_dataflow() -> dict[str, Any]:
             bucket_uri_map = {
-                "landing_external": f"oci://{names.landing_bucket}@{names.namespace}/",
-                "bronze_raw": f"oci://{names.bronze_bucket}@{names.namespace}/",
-                "silver_trusted": f"oci://{names.silver_bucket}@{names.namespace}/",
-                "gold_refined": f"oci://{names.gold_bucket}@{names.namespace}/",
+                "landing_external": names.landing_root_uri,
+                "bronze_raw": names.bronze_root_uri,
+                "silver_trusted": names.silver_root_uri,
+                "gold_refined": names.gold_root_uri,
             }
             results: dict[str, Any] = {}
             for index, app in enumerate(dataflow_apps, start=1):
@@ -2090,7 +2188,7 @@ def main() -> int:
                         "--file-uri",
                         app["file_uri"],
                         "--logs-bucket-uri",
-                        f"oci://{names.silver_bucket}@{names.namespace}/logs/",
+                        f"{names.silver_root_uri}logs/",
                         "--wait-for-state",
                         "ACTIVE",
                         "--max-wait-seconds",
@@ -2122,7 +2220,7 @@ def main() -> int:
                         "--display-name",
                         f"{app['application_name']}-run",
                         "--logs-bucket-uri",
-                        f"oci://{names.silver_bucket}@{names.namespace}/logs/",
+                        f"{names.silver_root_uri}logs/",
                         "--wait-for-state",
                         "SUCCEEDED",
                         "--max-wait-seconds",
@@ -2152,9 +2250,9 @@ def main() -> int:
                         "--state",
                         "SUCCEEDED",
                         "--driver-log-uri",
-                        f"oci://{names.silver_bucket}@{names.namespace}/logs/{app['application_name']}/driver.log",
+                        f"{names.silver_root_uri}logs/{app['application_name']}/driver.log",
                         "--executor-log-uri",
-                        f"oci://{names.silver_bucket}@{names.namespace}/logs/{app['application_name']}/executor.log",
+                        f"{names.silver_root_uri}logs/{app['application_name']}/executor.log",
                         "--rows-in",
                         str(index),
                         "--rows-out",
@@ -2734,7 +2832,7 @@ def main() -> int:
                     "--pattern-description",
                     "Expression pattern for gold agg sample files",
                     "--pattern-expression",
-                    f"{{bucketName:{names.gold_bucket}}}/exports/{{logicalEntity:agg_resumen_archivos_trafico}}/process_date=.*/.*.csv",
+                    f"{{bucketName:{names.gold_bucket}}}/{names.project_prefix}/exports/{{logicalEntity:agg_resumen_archivos_trafico}}/process_date=.*/.*.csv",
                     "--wait-for-state",
                     "ACTIVE",
                     "--max-wait-seconds",
@@ -3117,15 +3215,15 @@ def main() -> int:
                 [
                     "--environment",
                     names.environment,
-                    "--command",
-                    "profile-bucket-data",
-                    "--bucket-name",
-                    names.gold_bucket,
-                    "--object-glob",
-                    "objects/**/*agg_resumen_archivos_trafico*.csv",
-                    "--data-format",
-                    "csv",
-                    "--target-name",
+                        "--command",
+                        "profile-bucket-data",
+                        "--bucket-name",
+                        names.gold_bucket,
+                        "--object-glob",
+                        f"objects/{names.project_prefix}/**/*agg_resumen_archivos_trafico*.csv",
+                        "--data-format",
+                        "csv",
+                        "--target-name",
                     "gold_sample",
                 ]
                 + shared_runtime_args(

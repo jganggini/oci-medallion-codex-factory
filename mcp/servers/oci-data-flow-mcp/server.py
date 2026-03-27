@@ -21,7 +21,7 @@ from mcp.common.medallion_runtime import (
     record_control_runtime,
     runtime_payload_from_args,
 )
-from mcp.common.oci_cli import OciExecutionContext, execute_oci
+from mcp.common.oci_cli import OciExecutionContext, ensure_service_compartment_id, execute_oci, parse_oci_result_data
 from mcp.common.runtime import MirrorContext
 
 
@@ -62,6 +62,15 @@ def parse_shape_config(raw_json: str | None, ocpus: float | None, memory_gbs: fl
     if normalized_memory is not None:
         payload["memoryInGBs"] = normalized_memory
     return payload or None
+
+
+def default_flex_shape_config(shape: str | None, payload: dict[str, int | float] | None) -> dict[str, int | float] | None:
+    if payload is not None:
+        return payload
+    if shape and shape.upper().endswith(".FLEX"):
+        # OCI Data Flow rejects Flex shapes without an explicit shape config.
+        return {"ocpus": 1, "memoryInGBs": 16}
+    return payload
 
 
 def add_wait_options(command: list[str], wait_for_state: list[str], max_wait_seconds: int | None, wait_interval_seconds: int | None) -> None:
@@ -118,8 +127,16 @@ def mirror_application(
     dependency_result: dict[str, Any] | None,
 ) -> dict[str, Path | None]:
     operation = args.command.replace("-", "_")
-    driver_shape_config = parse_shape_config(args.driver_shape_config_json, args.driver_shape_ocpus, args.driver_shape_memory_gbs)
-    executor_shape_config = parse_shape_config(args.executor_shape_config_json, args.executor_shape_ocpus, args.executor_shape_memory_gbs)
+    driver_shape = args.driver_shape or ("VM.Standard.E4.Flex" if args.command == "create-application" and args.from_json_file is None else None)
+    executor_shape = args.executor_shape or ("VM.Standard.E4.Flex" if args.command == "create-application" and args.from_json_file is None else None)
+    driver_shape_config = default_flex_shape_config(
+        driver_shape,
+        parse_shape_config(args.driver_shape_config_json, args.driver_shape_ocpus, args.driver_shape_memory_gbs),
+    )
+    executor_shape_config = default_flex_shape_config(
+        executor_shape,
+        parse_shape_config(args.executor_shape_config_json, args.executor_shape_ocpus, args.executor_shape_memory_gbs),
+    )
     extra: dict[str, Any] = {
         "runtime": args.runtime,
         "oci_mode": args.oci_mode if args.runtime == "oci" else None,
@@ -130,9 +147,9 @@ def mirror_application(
         "compartment_id": args.compartment_id,
         "application_id": args.application_id,
         "application_type": args.application_type,
-        "driver_shape": args.driver_shape,
+        "driver_shape": driver_shape,
         "driver_shape_config": driver_shape_config,
-        "executor_shape": args.executor_shape,
+        "executor_shape": executor_shape,
         "executor_shape_config": executor_shape_config,
         "num_executors": args.num_executors,
         "spark_version": args.spark_version,
@@ -174,6 +191,7 @@ def build_application_command(
     if create_mode:
         if not args.compartment_id:
             raise SystemExit("--compartment-id es requerido en runtime oci para create-application")
+        ensure_service_compartment_id(args.compartment_id)
         command.extend(["--compartment-id", args.compartment_id])
 
     if args.display_name or from_json_file is None:
@@ -187,13 +205,19 @@ def build_application_command(
 
     if driver_shape:
         command.extend(["--driver-shape", driver_shape])
-    driver_shape_config = parse_shape_config(args.driver_shape_config_json, args.driver_shape_ocpus, args.driver_shape_memory_gbs)
+    driver_shape_config = default_flex_shape_config(
+        driver_shape,
+        parse_shape_config(args.driver_shape_config_json, args.driver_shape_ocpus, args.driver_shape_memory_gbs),
+    )
     if driver_shape_config:
         command.extend(["--driver-shape-config", json.dumps(driver_shape_config, ensure_ascii=True)])
 
     if executor_shape:
         command.extend(["--executor-shape", executor_shape])
-    executor_shape_config = parse_shape_config(args.executor_shape_config_json, args.executor_shape_ocpus, args.executor_shape_memory_gbs)
+    executor_shape_config = default_flex_shape_config(
+        executor_shape,
+        parse_shape_config(args.executor_shape_config_json, args.executor_shape_ocpus, args.executor_shape_memory_gbs),
+    )
     if executor_shape_config:
         command.extend(["--executor-shape-config", json.dumps(executor_shape_config, ensure_ascii=True)])
 
@@ -339,6 +363,7 @@ def main() -> int:
             mirrored = mirror_application(context, args, source_dir, from_json_file, archive_source_file, dependency_result)
             command = build_application_command(args, execution, from_json_file)
             result = execute_oci(execution, "data_flow", context, args.command, command, args.oci_mode)
+            oci_data = parse_oci_result_data(result)
             control_paths = record_control_runtime(
                 context,
                 runtime_payload,
@@ -347,6 +372,7 @@ def main() -> int:
                 "applied" if args.oci_mode == "apply" else "planned",
                 extra={
                     "application_name": args.application_name,
+                    "application_id": oci_data.get("id"),
                     "manifest_path": str(mirrored["manifest_path"]) if mirrored["manifest_path"] else None,
                     "archive_path": str(mirrored["archive_path"]) if mirrored["archive_path"] else None,
                     "plan_path": result.get("plan_path"),
@@ -359,6 +385,8 @@ def main() -> int:
                         "status": "ok",
                         "runtime": "oci",
                         "command": args.command,
+                        "application_id": oci_data.get("id"),
+                        "lifecycle_state": oci_data.get("lifecycle-state"),
                         "manifest_path": str(mirrored["manifest_path"]) if mirrored["manifest_path"] else None,
                         "archive_path": str(mirrored["archive_path"]) if mirrored["archive_path"] else None,
                         "application_json_path": str(mirrored["application_json_path"]) if mirrored["application_json_path"] else None,
@@ -471,6 +499,7 @@ def main() -> int:
         execution = OciExecutionContext(repo_root=context.repo_root, profile=args.oci_profile)
         if not args.application_id or not args.compartment_id:
             raise SystemExit("--application-id y --compartment-id son requeridos en runtime oci para run-application")
+        ensure_service_compartment_id(args.compartment_id)
         command = [
             "data-flow",
             "run",
@@ -490,6 +519,7 @@ def main() -> int:
             command.append("--force")
         add_wait_options(command, args.wait_for_state, args.max_wait_seconds, args.wait_interval_seconds)
         result = execute_oci(execution, "data_flow", context, "run-application", command, args.oci_mode)
+        oci_data = parse_oci_result_data(result)
         run_report = run_data_flow_application(
             context,
             args.application_name,
@@ -498,6 +528,8 @@ def main() -> int:
                 "runtime": "oci",
                 "oci_mode": args.oci_mode,
                 "application_id": args.application_id,
+                "service_run_ref": oci_data.get("id"),
+                "lifecycle_state": oci_data.get("lifecycle-state"),
                 "wait_for_state": args.wait_for_state,
                 "max_wait_seconds": args.max_wait_seconds,
                 "wait_interval_seconds": args.wait_interval_seconds,
@@ -509,19 +541,22 @@ def main() -> int:
             "data_flow",
             "run_application",
             "applied" if args.oci_mode == "apply" else "planned",
-            extra={
-                "application_name": args.application_name,
-                "run_report": str(run_report),
-                "plan_path": result.get("plan_path"),
-                "result_path": result.get("result_path"),
-            },
-        )
+                extra={
+                    "application_name": args.application_name,
+                    "service_run_ref": oci_data.get("id"),
+                    "run_report": str(run_report),
+                    "plan_path": result.get("plan_path"),
+                    "result_path": result.get("result_path"),
+                },
+            )
         print(
             json.dumps(
                 {
                     "status": "ok",
                     "runtime": "oci",
                     "command": args.command,
+                    "service_run_ref": oci_data.get("id"),
+                    "lifecycle_state": oci_data.get("lifecycle-state"),
                     "run_report": str(run_report),
                     "plan_path": result.get("plan_path"),
                     "result_path": result.get("result_path"),

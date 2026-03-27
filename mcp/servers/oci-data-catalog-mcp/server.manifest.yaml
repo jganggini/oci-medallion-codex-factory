@@ -8,6 +8,9 @@ expected_tools:
   - create_data_asset
   - create_connection
   - create_harvest_job_definition
+  - create_job
+  - create_pattern
+  - attach_data_selector_patterns
   - run_harvest_job
   - sync_di_lineage
   - import_openlineage

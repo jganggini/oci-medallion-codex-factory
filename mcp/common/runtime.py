@@ -82,6 +82,9 @@ class MirrorContext:
 
     @property
     def compartment_name(self) -> str:
+        override = os.getenv("OCI_MEDALLION_MIRROR_COMPARTMENT_NAME", "").strip()
+        if override:
+            return sanitize_name(override)
         return f"compartment-data-medallion-{self.environment}"
 
     @property

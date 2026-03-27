@@ -272,7 +272,7 @@ def main() -> int:
         ],
     )
 
-    # 5. Network in the project compartment.
+    # 5. Network inside the shared medallion platform compartment.
     run_command(
         repo_root,
         [

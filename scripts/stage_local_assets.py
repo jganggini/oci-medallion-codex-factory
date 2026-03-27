@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import configparser
 import json
 import os
 import shutil
@@ -32,6 +33,9 @@ SECTION_ARGS = (
     ("mappings", "mapeos y cruces campo a campo"),
     ("notes", "notas y aclaraciones"),
 )
+
+OCI_CONTAINER_DIR = "/mnt/oci"
+OCI_CONFIG_ARTIFACT_OPTIONS = ("key_file", "security_token_file")
 
 
 def ensure_directory(path: Path) -> None:
@@ -111,6 +115,96 @@ def copy_to_exact_path(
     return [copy_file(source, target, replace_existing, repo_root, host_repo_root)]
 
 
+def resolve_config_artifact(raw_value: str, config_source: Path) -> Path | None:
+    cleaned = os.path.expandvars(raw_value.strip().strip("'\""))
+    if not cleaned:
+        return None
+
+    if looks_like_windows_absolute_path(cleaned):
+        windows_candidate = PureWindowsPath(cleaned)
+        fallback = (config_source.parent / windows_candidate.name).resolve()
+        if fallback.exists():
+            return fallback
+
+    candidate = Path(cleaned).expanduser()
+    if candidate.exists():
+        return candidate.resolve()
+
+    if not candidate.is_absolute():
+        relative_candidate = (config_source.parent / candidate).resolve()
+        if relative_candidate.exists():
+            return relative_candidate
+
+    fallback = (config_source.parent / candidate.name).resolve()
+    if fallback.exists():
+        return fallback
+    return None
+
+
+def update_config_option(parser: configparser.RawConfigParser, section: str, option: str, value: str) -> None:
+    if section == parser.default_section:
+        parser[parser.default_section][option] = value
+        return
+    parser.set(section, option, value)
+
+
+def normalize_staged_oci_config(
+    repo_root: Path,
+    host_repo_root: Path | PurePath,
+    replace_existing: bool,
+    config_source: Path,
+    config_target: Path,
+    staged_key_path: Path | None,
+) -> tuple[list[dict[str, object]], list[str]]:
+    parser = configparser.RawConfigParser()
+    parser.optionxform = str
+    parser.read(config_target, encoding="utf-8")
+
+    staged: list[dict[str, object]] = []
+    errors: list[str] = []
+    copied_artifacts: set[str] = set()
+    sections = [parser.default_section, *parser.sections()]
+
+    for section in sections:
+        for option in OCI_CONFIG_ARTIFACT_OPTIONS:
+            if section == parser.default_section:
+                if option not in parser.defaults():
+                    continue
+                current_value = parser.defaults()[option]
+            else:
+                if not parser.has_option(section, option):
+                    continue
+                current_value = parser.get(section, option)
+
+            if option == "key_file" and staged_key_path is not None:
+                update_config_option(parser, section, option, f"{OCI_CONTAINER_DIR}/{staged_key_path.name}")
+                continue
+
+            artifact = resolve_config_artifact(current_value, config_source)
+            if artifact is None:
+                errors.append(f"No se pudo resolver {option} desde {config_source}")
+                continue
+
+            target = repo_root / ".local" / "oci" / artifact.name
+            target_key = str(target).lower()
+            if target_key not in copied_artifacts:
+                staged.extend(copy_to_exact_path(artifact, target, replace_existing, repo_root, host_repo_root))
+                copied_artifacts.add(target_key)
+            update_config_option(parser, section, option, f"{OCI_CONTAINER_DIR}/{target.name}")
+
+    with config_target.open("w", encoding="utf-8") as handle:
+        parser.write(handle)
+
+    staged.append(
+        {
+            "source": display_path(config_source, repo_root, host_repo_root),
+            "target": display_path(config_target, repo_root, host_repo_root),
+            "action": "normalized_for_docker_oci_cli",
+        }
+    )
+    return staged, errors
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Copia insumos y credenciales locales a la ruta canonica del factory.")
     parser.add_argument("--repo-root", required=True)
@@ -174,15 +268,20 @@ def stage_local_credentials(
 ) -> tuple[dict[str, list[dict[str, object]]], list[str]]:
     staged: dict[str, list[dict[str, object]]] = {}
     errors: list[str] = []
+    config_source_path: Path | None = None
+    config_target_path: Path | None = None
+    key_target_path: Path | None = None
 
     if args.oci_config_source:
         source = Path(args.oci_config_source).expanduser().resolve()
         if not source.exists():
             errors.append(f"No existe la ruta fuente del OCI config: {source}")
         else:
+            config_source_path = source
+            config_target_path = repo_root / ".local" / "oci" / "config"
             staged["oci_config"] = copy_to_exact_path(
                 source,
-                repo_root / ".local" / "oci" / "config",
+                config_target_path,
                 replace_existing,
                 repo_root,
                 host_repo_root,
@@ -193,13 +292,26 @@ def stage_local_credentials(
         if not source.exists():
             errors.append(f"No existe la ruta fuente de la llave .pem: {source}")
         else:
+            key_target_path = repo_root / ".local" / "oci" / "key.pem"
             staged["oci_key"] = copy_to_exact_path(
                 source,
-                repo_root / ".local" / "oci" / "key.pem",
+                key_target_path,
                 replace_existing,
                 repo_root,
                 host_repo_root,
             )
+
+    if config_source_path is not None and config_target_path is not None:
+        normalized_entries, normalize_errors = normalize_staged_oci_config(
+            repo_root,
+            host_repo_root,
+            replace_existing,
+            config_source_path,
+            config_target_path,
+            key_target_path,
+        )
+        staged.setdefault("oci_config", []).extend(normalized_entries)
+        errors.extend(normalize_errors)
 
     if args.wallet_source:
         if not args.adb_name:

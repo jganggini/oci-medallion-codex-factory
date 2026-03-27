@@ -11,7 +11,7 @@ Definir una baseline IAM repetible para el factory medallion, separando:
 
 ## Principios
 
-1. crear el `compartment` del proyecto primero
+1. crear o reutilizar primero el `compartment` compartido de la plataforma medallion por ambiente
 2. crear `groups`, `dynamic groups` y `policies` antes de publicar buckets, ADB, red o jobs
 3. usar alcance por `compartment` siempre que sea posible
 4. reservar `tenancy` para `inspect compartments` y casos donde Oracle lo exige
@@ -122,4 +122,4 @@ Any {resource.id = '<catalog_ocid>'}
 
 - `iam_baseline` vive dentro de `project.medallion.yaml` para que intake, bootstrap y publish lo traten como parte del contrato del proyecto.
 - `oci-iam-mcp` debe crear `groups`, `dynamic groups` y `policies` antes del resto de servicios.
-- Si un ambiente comparte red, vault o logging fuera del compartment del proyecto, duplica las policies sobre el compartment compartido en vez de ampliar permisos en tenancy.
+- Si un ambiente comparte red, vault o logging fuera del compartment medallion principal, duplica las policies sobre el compartment compartido correspondiente en vez de ampliar permisos en tenancy.

@@ -11,8 +11,14 @@ REPO_ROOT_DEFAULT = CURRENT_FILE.parents[3]
 if str(REPO_ROOT_DEFAULT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT_DEFAULT))
 
-from mcp.common.local_services import create_iam_compartment, create_iam_group, create_iam_policy, export_iam_manifest
-from mcp.common.oci_cli import OciExecutionContext, execute_oci
+from mcp.common.local_services import (
+    create_iam_compartment,
+    create_iam_dynamic_group,
+    create_iam_group,
+    create_iam_policy,
+    export_iam_manifest,
+)
+from mcp.common.oci_cli import OciExecutionContext, execute_oci, parse_oci_result_data
 from mcp.common.runtime import MirrorContext
 
 
@@ -21,6 +27,8 @@ COMMAND_ALIASES = {
     "create_compartment": "create_compartment",
     "create-group": "create_group",
     "create_group": "create_group",
+    "create-dynamic-group": "create_dynamic_group",
+    "create_dynamic_group": "create_dynamic_group",
     "create-policy": "create_policy",
     "create_policy": "create_policy",
     "export-iam-manifest": "export_iam_manifest",
@@ -40,6 +48,8 @@ def main() -> int:
     parser.add_argument("--parent-compartment-id")
     parser.add_argument("--compartment-id")
     parser.add_argument("--group-name")
+    parser.add_argument("--dynamic-group-name")
+    parser.add_argument("--matching-rule")
     parser.add_argument("--policy-name")
     parser.add_argument("--description")
     parser.add_argument("--statement", action="append", default=[])
@@ -78,6 +88,21 @@ def main() -> int:
             if args.description:
                 command.extend(["--description", args.description])
             oci_result = execute_oci(execution, "iam", context, "create_group", command, args.oci_mode)
+        elif canonical_command == "create_dynamic_group":
+            if not args.dynamic_group_name or not args.matching_rule:
+                raise SystemExit("--dynamic-group-name y --matching-rule son requeridos para create_dynamic_group en runtime oci")
+            command = [
+                "iam",
+                "dynamic-group",
+                "create",
+                "--name",
+                args.dynamic_group_name,
+                "--matching-rule",
+                args.matching_rule,
+            ]
+            if args.description:
+                command.extend(["--description", args.description])
+            oci_result = execute_oci(execution, "iam", context, "create_dynamic_group", command, args.oci_mode)
         else:
             if not args.policy_name or not args.compartment_id or not args.statement:
                 raise SystemExit("--policy-name, --compartment-id y --statement son requeridos para create_policy en runtime oci")
@@ -96,6 +121,8 @@ def main() -> int:
                 command.extend(["--description", args.description])
             oci_result = execute_oci(execution, "iam", context, "create_policy", command, args.oci_mode)
 
+    oci_data = parse_oci_result_data(oci_result) if oci_result else {}
+
     if canonical_command == "create_compartment":
         if not args.compartment_name:
             raise SystemExit("--compartment-name es requerido para create_compartment")
@@ -107,11 +134,25 @@ def main() -> int:
                 "oci_mode": args.oci_mode if args.runtime == "oci" else None,
                 "parent_compartment_id": args.parent_compartment_id,
                 "description": args.description,
+                "resource_id": oci_data.get("id"),
+                "lifecycle_state": oci_data.get("lifecycle-state"),
                 "plan_path": oci_result.get("plan_path"),
                 "result_path": oci_result.get("result_path"),
             },
         )
-        print(json.dumps({"status": "ok", "command": canonical_command, "manifest_path": str(result)}, indent=2, ensure_ascii=True))
+        print(
+            json.dumps(
+                {
+                    "status": "ok",
+                    "command": canonical_command,
+                    "manifest_path": str(result),
+                    "compartment_id": oci_data.get("id"),
+                    "lifecycle_state": oci_data.get("lifecycle-state"),
+                },
+                indent=2,
+                ensure_ascii=True,
+            )
+        )
         return 0
 
     if canonical_command == "create_group":
@@ -125,11 +166,57 @@ def main() -> int:
                 "oci_mode": args.oci_mode if args.runtime == "oci" else None,
                 "compartment_id": args.compartment_id,
                 "description": args.description,
+                "resource_id": oci_data.get("id"),
+                "lifecycle_state": oci_data.get("lifecycle-state"),
                 "plan_path": oci_result.get("plan_path"),
                 "result_path": oci_result.get("result_path"),
             },
         )
-        print(json.dumps({"status": "ok", "command": canonical_command, "manifest_path": str(result)}, indent=2, ensure_ascii=True))
+        print(
+            json.dumps(
+                {
+                    "status": "ok",
+                    "command": canonical_command,
+                    "manifest_path": str(result),
+                    "group_id": oci_data.get("id"),
+                    "lifecycle_state": oci_data.get("lifecycle-state"),
+                },
+                indent=2,
+                ensure_ascii=True,
+            )
+        )
+        return 0
+
+    if canonical_command == "create_dynamic_group":
+        if not args.dynamic_group_name or not args.matching_rule:
+            raise SystemExit("--dynamic-group-name y --matching-rule son requeridos para create_dynamic_group")
+        result = create_iam_dynamic_group(
+            context,
+            args.dynamic_group_name,
+            args.matching_rule,
+            {
+                "runtime": args.runtime,
+                "oci_mode": args.oci_mode if args.runtime == "oci" else None,
+                "description": args.description,
+                "resource_id": oci_data.get("id"),
+                "lifecycle_state": oci_data.get("lifecycle-state"),
+                "plan_path": oci_result.get("plan_path"),
+                "result_path": oci_result.get("result_path"),
+            },
+        )
+        print(
+            json.dumps(
+                {
+                    "status": "ok",
+                    "command": canonical_command,
+                    "manifest_path": str(result),
+                    "dynamic_group_id": oci_data.get("id"),
+                    "lifecycle_state": oci_data.get("lifecycle-state"),
+                },
+                indent=2,
+                ensure_ascii=True,
+            )
+        )
         return 0
 
     if not args.policy_name or not args.statement:
@@ -143,11 +230,25 @@ def main() -> int:
             "oci_mode": args.oci_mode if args.runtime == "oci" else None,
             "compartment_id": args.compartment_id,
             "description": args.description,
+            "resource_id": oci_data.get("id"),
+            "lifecycle_state": oci_data.get("lifecycle-state"),
             "plan_path": oci_result.get("plan_path"),
             "result_path": oci_result.get("result_path"),
         },
     )
-    print(json.dumps({"status": "ok", "command": canonical_command, "manifest_path": str(result)}, indent=2, ensure_ascii=True))
+    print(
+        json.dumps(
+            {
+                "status": "ok",
+                "command": canonical_command,
+                "manifest_path": str(result),
+                "policy_id": oci_data.get("id"),
+                "lifecycle_state": oci_data.get("lifecycle-state"),
+            },
+            indent=2,
+            ensure_ascii=True,
+        )
+    )
     return 0
 
 

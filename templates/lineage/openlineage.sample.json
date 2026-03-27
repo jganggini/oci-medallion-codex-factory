@@ -1,0 +1,39 @@
+{
+  "eventType": "COMPLETE",
+  "eventTime": "2026-03-26T00:00:00Z",
+  "producer": "https://github.com/jganggini/oci-medallion-codex-factory",
+  "run": {
+    "runId": "sample-run-20260326"
+  },
+  "job": {
+    "namespace": "oci-medallion.dev.sample-project",
+    "name": "gold_loader"
+  },
+  "inputs": [
+    {
+      "namespace": "oci://bucket-gold-refined@example-ns",
+      "name": "exports/agg_sample_resumen/process_date=20260326/*.csv"
+    }
+  ],
+  "outputs": [
+    {
+      "namespace": "oracle://adb_sample_gold/APP_GOLD",
+      "name": "AGG_SAMPLE_RESUMEN"
+    }
+  ],
+  "jobFacets": {
+    "documentation": {
+      "_producer": "oci-medallion-codex-factory",
+      "_schemaURL": "https://openlineage.io/spec/1-0-0/OpenLineage.json",
+      "description": "Sample OpenLineage payload for local Data Catalog testing."
+    }
+  },
+  "runFacets": {
+    "nominalTime": {
+      "_producer": "oci-medallion-codex-factory",
+      "_schemaURL": "https://openlineage.io/spec/1-0-0/OpenLineage.json",
+      "nominalStartTime": "2026-03-26T00:00:00Z",
+      "nominalEndTime": "2026-03-26T00:15:00Z"
+    }
+  }
+}

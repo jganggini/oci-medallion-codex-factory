@@ -64,11 +64,11 @@ Cada MCP debe:
 
 Cuando el proyecto entra en despliegue real, la secuencia base debe ser:
 
-1. compartment del proyecto
-2. baseline IAM del proyecto: groups, dynamic groups y policies por servicio
+1. compartment compartido de la plataforma medallion por ambiente
+2. baseline IAM de la plataforma y del proyecto: groups, dynamic groups y policies por servicio
 3. buckets `landing_external`, `bronze_raw`, `silver_trusted` y `gold_refined`
 4. Autonomous Database y control plane
-5. red del proyecto
+5. red requerida por el despliegue
 6. carga de archivos a landing cuando aplique
 7. Data Flow
 8. Data Integration

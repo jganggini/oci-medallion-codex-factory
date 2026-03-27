@@ -115,9 +115,11 @@ If a placeholder, template, or starter artifact would unblock the user, offer to
 ## Skills And .codex
 
 - Project skills live in `skills/`.
-- `.codex/` is only for repository-level Codex helper material such as shared notes or rules.
+- `.codex/` is for repository-level Codex helper material and optional project-scoped MCP registration.
 - Do not recreate project skills under `.codex/skills/`.
-- Do not assume `.codex/config.toml` exists in the repo. User-level Codex config is expected to live outside the repository.
+- User-level Codex config still lives outside the repository.
+- If `.codex/config.toml` exists here, keep it limited to factory-specific MCP servers and avoid copying personal profiles, auth settings, or unrelated global configuration into the repo.
+- `setup-dev.ps1` and `setup-dev.sh` should keep `.codex/config.toml` synchronized from `.codex/config.template.toml`.
 - For broad deployment or migration requests, start with `skills/oci-medallion-advisor/SKILL.md` and then route to the specialized skill for the current stage.
 
 ## Execution Model

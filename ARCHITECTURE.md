@@ -80,6 +80,7 @@ El schema recomendado es `MDL_CTL` y el bootstrap vive en `templates/autonomous/
 - capas objetivo
 - buckets existentes y si son externos al flujo
 - source assets
+- baseline IAM del proyecto
 - perfiles de red
 - control plane
 - perfiles de Autonomous
@@ -112,7 +113,8 @@ Cada carpeta debe almacenar manifests efectivos, JSON redacted, artefactos publi
 2. `migration-intake` valida el contrato y genera inventario estructurado.
 3. El manifiesto fija capas, buckets existentes, assets fuente y estrategia operacional.
 4. La foundation OCI se provisiona con Terraform compatible con Resource Manager.
-5. Los MCPs crean o actualizan recursos y sincronizan el espejo local de OCI.
-6. El control plane registra runs, steps, slices, checkpoints, QA y lineage outbox.
-7. Data Catalog cosecha metadata nativa y recibe lineage custom para SQL, cargas y reprocesos.
-8. Los equipos revisan el espejo local y los artefactos antes de promover cambios.
+5. El baseline IAM crea groups, dynamic groups y policies antes de publicar el resto de servicios.
+6. Los MCPs crean o actualizan recursos y sincronizan el espejo local de OCI.
+7. El control plane registra runs, steps, slices, checkpoints, QA y lineage outbox.
+8. Data Catalog cosecha metadata nativa y recibe lineage custom para SQL, cargas y reprocesos.
+9. Los equipos revisan el espejo local y los artefactos antes de promover cambios.

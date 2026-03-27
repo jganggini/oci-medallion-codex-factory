@@ -17,11 +17,23 @@ PATH_OPTIONS=(
   --wallet-dir
   --sql-file
   --sql-dir
+  --merge-sql-file
   --source-file
   --contract-file
   --result-path
   --working-directory
   --config-source-file
+)
+PASS_THROUGH_ENV_VARS=(
+  DB_USER
+  DB_PASSWORD
+  APP_GOLD_PASSWORD
+  MDL_CTL_PASSWORD
+  DB_WALLET_PASSWORD
+  ADW_USER
+  ADW_DSN
+  OCI_MEDALLION_MIRROR_COMPARTMENT_NAME
+  OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING
 )
 
 contains_path_option() {
@@ -106,4 +118,13 @@ while (($#)); do
 done
 
 cd "$REPO_ROOT"
-docker compose run --rm -e "HOST_REPO_ROOT=$REPO_ROOT" oci-runner python "$SCRIPT_PATH" "${CONTAINER_ARGS[@]}"
+DOCKER_ARGS=(compose run --rm -e "HOST_REPO_ROOT=$REPO_ROOT")
+for env_name in "${PASS_THROUGH_ENV_VARS[@]}"; do
+  env_value="${!env_name:-}"
+  if [[ -n "$env_value" ]]; then
+    DOCKER_ARGS+=(-e "$env_name=$env_value")
+  fi
+done
+DOCKER_ARGS+=(oci-runner python "$SCRIPT_PATH")
+DOCKER_ARGS+=("${CONTAINER_ARGS[@]}")
+docker "${DOCKER_ARGS[@]}"
