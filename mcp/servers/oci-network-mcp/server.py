@@ -12,6 +12,8 @@ if str(REPO_ROOT_DEFAULT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT_DEFAULT))
 
 from mcp.common.local_services import (
+    create_network_internet_gateway,
+    create_network_nat_gateway,
     create_network_nsg,
     create_network_route_table,
     create_network_service_gateway,
@@ -36,6 +38,10 @@ COMMAND_ALIASES = {
     "create_route_table": "create_route_table",
     "create-service-gateway": "create_service_gateway",
     "create_service_gateway": "create_service_gateway",
+    "create-internet-gateway": "create_internet_gateway",
+    "create_internet_gateway": "create_internet_gateway",
+    "create-nat-gateway": "create_nat_gateway",
+    "create_nat_gateway": "create_nat_gateway",
     "add-nsg-rules": "add_nsg_rules",
     "add_nsg_rules": "add_nsg_rules",
     "update-route-table": "update_route_table",
@@ -59,6 +65,8 @@ def main() -> int:
     parser.add_argument("--subnet-name")
     parser.add_argument("--nsg-name")
     parser.add_argument("--service-gateway-name")
+    parser.add_argument("--internet-gateway-name")
+    parser.add_argument("--nat-gateway-name")
     parser.add_argument("--route-table-name")
     parser.add_argument("--cidr-block", action="append", default=[])
     parser.add_argument("--dns-label")
@@ -66,6 +74,7 @@ def main() -> int:
     parser.add_argument("--nsg-id", action="append", default=[])
     parser.add_argument("--service-id", action="append", default=[])
     parser.add_argument("--prohibit-public-ip-on-vnic", default="true")
+    parser.add_argument("--is-enabled", default="true")
     parser.add_argument("--description")
     parser.add_argument("--route-rule-json", action="append", default=[])
     parser.add_argument("--security-rules-json")
@@ -176,6 +185,40 @@ def main() -> int:
                 json.dumps([{"serviceId": service_id} for service_id in args.service_id], ensure_ascii=True),
             ]
             oci_result = execute_oci(execution, "network", context, "create_service_gateway", command, args.oci_mode)
+        elif canonical_command == "create_internet_gateway":
+            if not args.compartment_id or not args.vcn_id or not args.internet_gateway_name:
+                raise SystemExit("--compartment-id, --vcn-id y --internet-gateway-name son requeridos para create_internet_gateway en runtime oci")
+            ensure_service_compartment_id(args.compartment_id)
+            command = [
+                "network",
+                "internet-gateway",
+                "create",
+                "--compartment-id",
+                args.compartment_id,
+                "--vcn-id",
+                args.vcn_id,
+                "--display-name",
+                args.internet_gateway_name,
+                "--is-enabled",
+                args.is_enabled,
+            ]
+            oci_result = execute_oci(execution, "network", context, "create_internet_gateway", command, args.oci_mode)
+        elif canonical_command == "create_nat_gateway":
+            if not args.compartment_id or not args.vcn_id or not args.nat_gateway_name:
+                raise SystemExit("--compartment-id, --vcn-id y --nat-gateway-name son requeridos para create_nat_gateway en runtime oci")
+            ensure_service_compartment_id(args.compartment_id)
+            command = [
+                "network",
+                "nat-gateway",
+                "create",
+                "--compartment-id",
+                args.compartment_id,
+                "--vcn-id",
+                args.vcn_id,
+                "--display-name",
+                args.nat_gateway_name,
+            ]
+            oci_result = execute_oci(execution, "network", context, "create_nat_gateway", command, args.oci_mode)
         elif canonical_command == "update_route_table":
             if not args.route_table_id:
                 raise SystemExit("--route-table-id es requerido para update_route_table en runtime oci")
@@ -385,6 +428,75 @@ def main() -> int:
                     "command": canonical_command,
                     "manifest_path": str(result),
                     "service_gateway_id": oci_data.get("id"),
+                    "lifecycle_state": oci_data.get("lifecycle-state"),
+                },
+                indent=2,
+                ensure_ascii=True,
+            )
+        )
+        return 0
+
+    if canonical_command == "create_internet_gateway":
+        if not args.internet_gateway_name:
+            raise SystemExit("--internet-gateway-name es requerido para create_internet_gateway")
+        result = create_network_internet_gateway(
+            context,
+            args.internet_gateway_name,
+            {
+                "runtime": args.runtime,
+                "oci_mode": args.oci_mode if args.runtime == "oci" else None,
+                "compartment_id": args.compartment_id,
+                "vcn_name": args.vcn_name,
+                "vcn_id": args.vcn_id,
+                "is_enabled": args.is_enabled,
+                "description": args.description,
+                "resource_id": oci_data.get("id"),
+                "lifecycle_state": oci_data.get("lifecycle-state"),
+                "plan_path": oci_result.get("plan_path"),
+                "result_path": oci_result.get("result_path"),
+            },
+        )
+        print(
+            json.dumps(
+                {
+                    "status": "ok",
+                    "command": canonical_command,
+                    "manifest_path": str(result),
+                    "internet_gateway_id": oci_data.get("id"),
+                    "lifecycle_state": oci_data.get("lifecycle-state"),
+                },
+                indent=2,
+                ensure_ascii=True,
+            )
+        )
+        return 0
+
+    if canonical_command == "create_nat_gateway":
+        if not args.nat_gateway_name:
+            raise SystemExit("--nat-gateway-name es requerido para create_nat_gateway")
+        result = create_network_nat_gateway(
+            context,
+            args.nat_gateway_name,
+            {
+                "runtime": args.runtime,
+                "oci_mode": args.oci_mode if args.runtime == "oci" else None,
+                "compartment_id": args.compartment_id,
+                "vcn_name": args.vcn_name,
+                "vcn_id": args.vcn_id,
+                "description": args.description,
+                "resource_id": oci_data.get("id"),
+                "lifecycle_state": oci_data.get("lifecycle-state"),
+                "plan_path": oci_result.get("plan_path"),
+                "result_path": oci_result.get("result_path"),
+            },
+        )
+        print(
+            json.dumps(
+                {
+                    "status": "ok",
+                    "command": canonical_command,
+                    "manifest_path": str(result),
+                    "nat_gateway_id": oci_data.get("id"),
                     "lifecycle_state": oci_data.get("lifecycle-state"),
                 },
                 indent=2,

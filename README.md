@@ -86,7 +86,8 @@ Trabaja asi:
 13. antes de ejecutar cambios, resume el plan por etapas
 14. cuando cierres las preguntas, el plan inicial y el staging, levanta Docker con docker compose up -d dev-base oci-runner dataflow-local antes de intake, bootstrap o publish
 15. ejecuta siempre los scripts del repo, los MCPs y el OCI CLI usando Docker; no dependas de Python ni OCI CLI instalados en host
-16. guiame hasta dejar el proyecto listo para desplegar, migrar, validar y reprocesar por slice
+16. usa por defecto `network_mode public` en `dev`, `hybrid` en `qa` y `private` en `prod`; solo preguntame si quieres desviarte de eso
+17. guiame hasta dejar el proyecto listo para desplegar, migrar, validar y reprocesar por slice
 ```
 
 Con ese prompt, Codex deberia ayudarte a:
@@ -99,6 +100,7 @@ Con ese prompt, Codex deberia ayudarte a:
 - ejecutar el staging automatico para mover los archivos a su ubicacion correcta antes del intake
 - hacer el staging y el intake usando los wrappers Docker del repo
 - asumir que la ruta normal es `landing_external -> bronze_raw -> silver_trusted -> gold_refined -> gold_adb`
+- usar `network_mode public` en `dev`, `hybrid` en `qa` y `private` en `prod`, salvo que tu indiques otra cosa
 - preguntar si ya existe algun bucket o asset con informacion y si corresponde a `landing_external`, `bronze_raw`, `silver_trusted`, `gold_refined` o `gold_adb`
 - no preguntarte si quieres un despliegue parcial o total salvo que tu mismo limites el alcance
 - no asumir que tener un bucket con datos implica que toda la arquitectura medallion ya esta creada

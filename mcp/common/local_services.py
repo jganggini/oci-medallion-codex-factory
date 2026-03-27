@@ -202,6 +202,34 @@ def create_network_service_gateway(context: MirrorContext, service_gateway_name:
     return path
 
 
+def create_network_internet_gateway(context: MirrorContext, internet_gateway_name: str, metadata: dict[str, Any]) -> Path:
+    service_root = context.service_root("network")
+    path = ensure_directory(service_root / "internet_gateways") / f"{sanitize_name(internet_gateway_name)}.json"
+    payload = {
+        "internet_gateway_name": internet_gateway_name,
+        "created_at_utc": utc_timestamp(),
+        "extra": metadata,
+    }
+    write_json(path, payload)
+    _record_operation(service_root, context, "network", "create_internet_gateway", payload)
+    export_network_manifest(context)
+    return path
+
+
+def create_network_nat_gateway(context: MirrorContext, nat_gateway_name: str, metadata: dict[str, Any]) -> Path:
+    service_root = context.service_root("network")
+    path = ensure_directory(service_root / "nat_gateways") / f"{sanitize_name(nat_gateway_name)}.json"
+    payload = {
+        "nat_gateway_name": nat_gateway_name,
+        "created_at_utc": utc_timestamp(),
+        "extra": metadata,
+    }
+    write_json(path, payload)
+    _record_operation(service_root, context, "network", "create_nat_gateway", payload)
+    export_network_manifest(context)
+    return path
+
+
 def update_network_route_table(context: MirrorContext, route_table_name: str, metadata: dict[str, Any]) -> Path:
     service_root = context.service_root("network")
     path = ensure_directory(service_root / "route_tables") / f"{sanitize_name(route_table_name)}.json"
@@ -232,6 +260,8 @@ def export_network_manifest(context: MirrorContext) -> Path:
         "subnets": _json_children(service_root / "subnets"),
         "nsgs": _json_children(service_root / "nsgs"),
         "service_gateways": _json_children(service_root / "service_gateways"),
+        "internet_gateways": _json_children(service_root / "internet_gateways"),
+        "nat_gateways": _json_children(service_root / "nat_gateways"),
         "route_tables": _json_children(service_root / "route_tables"),
     }
     return _write_service_manifest(service_root, "network.manifest.json", payload)

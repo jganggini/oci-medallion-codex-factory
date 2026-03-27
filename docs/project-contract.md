@@ -9,6 +9,7 @@ Cada proyecto medallion debe definir un `project.medallion.yaml`.
 - `project_id`
 - `domain`
 - `environment`
+- `network_mode`
 - `deployment_scope`
 - `delivery_target`
 - `migration_input_root`
@@ -39,6 +40,8 @@ Cada proyecto medallion debe definir un `project.medallion.yaml`.
 
 - `deployment_scope` debe ser `end_to_end_gold` por defecto. Solo debe declararse un alcance parcial cuando el usuario o el proyecto lo pidan explicitamente.
 - `delivery_target` debe ser `gold_adb` por defecto y representar la entrega final del proyecto en Autonomous Database.
+- `network_mode` debe ser `public`, `hybrid` o `private`.
+- Si el proyecto no define otra cosa, el default por ambiente debe ser `dev=public`, `qa=hybrid` y `prod=private`.
 - `migration_input_root` debe apuntar a `workspace/migration-input/<project_id>/`.
 - `sql_sources`, `script_sources`, `data_sources`, `doc_sources`, `sample_sources` y `reference_doc_sources` deben ser relativos a `migration_input_root`.
 - `pending_input_deliveries` debe registrar cualquier archivo prometido durante la entrevista que aun no fue copiado al repo, con `kind`, `source_path`, `target_path` y `status`.
@@ -50,12 +53,16 @@ Cada proyecto medallion debe definir un `project.medallion.yaml`.
 - `existing_buckets` no puede usarse para inferir que todas las capas ya existen.
 - Cada bucket o asset existente debe indicar `layer`, `managed_by_factory` e `ingestion_outside_flow`.
 - `network_profile.compartment_name` debe representar el compartment compartido de la plataforma medallion por ambiente, normalmente `data-medallion-<env>`, no un compartment por proyecto.
+- `network_profile` debe derivar de `network_mode` y dejar explicito si DI corre como workspace privado, si ADB queda con endpoint privado o publico y si Data Flow requiere private endpoint.
 - Los buckets administrados por el factory deben reutilizar nombres fijos por capa: `bucket-landing-external`, `bucket-bronze-raw`, `bucket-silver-trusted` y `bucket-gold-refined`.
 - El aislamiento por proyecto dentro de capas compartidas debe hacerse por prefijos u objetos particionados dentro del bucket, por ejemplo `projects/<project_id>/...` o `source_system=.../entity=.../business_date=.../batch_id=...`.
 - `iam_baseline` debe declarar al menos un grupo operador, los `dynamic groups` requeridos por ADB y Data Catalog cuando esos servicios esten habilitados, y bundles de policies por servicio.
 - `iam_baseline` debe usar alcance por compartment salvo que Oracle requiera tenancy, como en `inspect compartments`.
 - Si `di_pipeline.enabled` es `true`, el manifiesto debe registrar el `workspace_ocid` o su placeholder y las policies condicionadas por `request.principal.type='disworkspace'`.
 - Si `autonomous_profile.enabled` es `true`, el manifiesto debe declarar un `dynamic group` para el resource principal de ADB.
+- `network_mode=public` debe dejar ADW con acceso publico y DI sin workspace privado.
+- `network_mode=hybrid` debe dejar ADW publica para operadores y mantener DI privado; Data Flow puede usar red administrada si no se publica un private endpoint estable.
+- `network_mode=private` debe dejar ADW, DI y cualquier acceso de runtime sensible dentro de la VCN del ambiente.
 - `control_plane.database_name` debe apuntar al ADB que centraliza `workflow_id`, `run_id`, `slice_key`, checkpoints, QA y lineage outbox.
 - `control_plane.partition_pattern` debe soportar replay por `entity + business_date + batch_id`.
 - `lineage.strategy` debe declarar si el proyecto usa lineage nativo, custom o hibrido.
