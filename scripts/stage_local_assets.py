@@ -5,7 +5,7 @@ import configparser
 import json
 import os
 import shutil
-from pathlib import Path, PurePath, PureWindowsPath
+from pathlib import Path, PurePath, PurePosixPath, PureWindowsPath
 
 
 SECTION_DESTINATIONS = {
@@ -36,6 +36,7 @@ SECTION_ARGS = (
 
 OCI_CONTAINER_DIR = "/mnt/oci"
 OCI_CONFIG_ARTIFACT_OPTIONS = ("key_file", "security_token_file")
+DATAFLOW_DEPENDENCY_TEMPLATE = Path("templates") / "data_flow" / "dependency_package"
 
 
 def ensure_directory(path: Path) -> None:
@@ -113,6 +114,31 @@ def copy_to_exact_path(
     if source.is_dir():
         raise IsADirectoryError(f"Se esperaba un archivo y se recibio un directorio: {source}")
     return [copy_file(source, target, replace_existing, repo_root, host_repo_root)]
+
+
+def normalize_job_name(job_name: str) -> Path:
+    cleaned = job_name.strip().replace("\\", "/").strip("/")
+    if not cleaned:
+        raise ValueError("El nombre del job Data Flow no puede estar vacio.")
+    relative = PurePosixPath(cleaned)
+    if relative.is_absolute() or ".." in relative.parts:
+        raise ValueError(f"Nombre de job Data Flow invalido: {job_name}")
+    return Path(*relative.parts)
+
+
+def scaffold_dataflow_dependency_root(repo_root: Path, project_id: str, job_name: str) -> Path:
+    template_root = repo_root / DATAFLOW_DEPENDENCY_TEMPLATE
+    target_root = repo_root / "workspace" / "generated" / project_id / "data_flow" / "dependencies" / normalize_job_name(job_name)
+    for item in sorted(template_root.rglob("*")):
+        relative = item.relative_to(template_root)
+        target = target_root / relative
+        if item.is_dir():
+            ensure_directory(target)
+            continue
+        if not target.exists():
+            ensure_directory(target.parent)
+            shutil.copy2(item, target)
+    return target_root
 
 
 def resolve_config_artifact(raw_value: str, config_source: Path) -> Path | None:
@@ -214,6 +240,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--oci-config-source")
     parser.add_argument("--oci-key-source")
     parser.add_argument("--wallet-source")
+    parser.add_argument("--dataflow-job-name", action="append", default=[], metavar="JOB_NAME")
+    parser.add_argument("--dataflow-jar-source", action="append", default=[], metavar="PATH")
     parser.add_argument("--replace-existing", action="store_true")
 
     for section, description in SECTION_ARGS:
@@ -226,6 +254,55 @@ def build_parser() -> argparse.ArgumentParser:
         )
 
     return parser
+
+
+def stage_dataflow_dependencies(
+    repo_root: Path,
+    host_repo_root: Path | PurePath,
+    project_id: str,
+    args: argparse.Namespace,
+    replace_existing: bool,
+) -> tuple[dict[str, list[dict[str, object]]], list[str]]:
+    staged: dict[str, list[dict[str, object]]] = {}
+    errors: list[str] = []
+    job_names = list(args.dataflow_job_name or [])
+    jar_sources = list(args.dataflow_jar_source or [])
+
+    if not job_names and not jar_sources:
+        return staged, errors
+    if len(job_names) != len(jar_sources):
+        errors.append(
+            "Debes indicar la misma cantidad de --dataflow-job-name y --dataflow-jar-source para stagear dependencias de Data Flow."
+        )
+        return staged, errors
+
+    for job_name, raw_source in zip(job_names, jar_sources):
+        try:
+            dependency_root = scaffold_dataflow_dependency_root(repo_root, project_id, job_name)
+        except ValueError as exc:
+            errors.append(str(exc))
+            continue
+
+        source = Path(raw_source).expanduser().resolve()
+        if not source.exists():
+            errors.append(f"No existe la ruta fuente del jar de Data Flow para {job_name}: {source}")
+            continue
+        if source.is_file() and source.suffix.lower() != ".jar":
+            errors.append(f"La ruta fuente para {job_name} no es un .jar: {source}")
+            continue
+
+        java_dir = dependency_root / "java"
+        copied = copy_into_directory(source, java_dir, replace_existing, repo_root, host_repo_root)
+        staged[job_name] = [
+            {
+                **entry,
+                "job_name": job_name,
+                "dependency_root": display_path(dependency_root, repo_root, host_repo_root),
+            }
+            for entry in copied
+        ]
+
+    return staged, errors
 
 
 def stage_section_sources(
@@ -355,6 +432,13 @@ def main() -> int:
         args,
         args.replace_existing,
     )
+    staged_dataflow_dependencies, dataflow_dependency_errors = stage_dataflow_dependencies(
+        repo_root,
+        host_repo_root,
+        args.project_id,
+        args,
+        args.replace_existing,
+    )
     staged_credentials, credential_errors = stage_local_credentials(
         repo_root,
         host_repo_root,
@@ -362,13 +446,14 @@ def main() -> int:
         args.replace_existing,
     )
 
-    errors = input_errors + credential_errors
+    errors = input_errors + dataflow_dependency_errors + credential_errors
     report = {
         "project_id": args.project_id,
         "environment": args.environment,
         "adb_name": args.adb_name,
         "replace_existing": args.replace_existing,
         "staged_inputs": staged_inputs,
+        "staged_dataflow_dependencies": staged_dataflow_dependencies,
         "staged_credentials": staged_credentials,
         "errors": errors,
         "status": "failed" if errors else "ok",

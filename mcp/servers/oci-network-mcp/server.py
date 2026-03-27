@@ -18,6 +18,7 @@ from mcp.common.local_services import (
     create_network_subnet,
     create_network_vcn,
     export_network_manifest,
+    update_network_nsg,
     update_network_route_table,
 )
 from mcp.common.oci_cli import OciExecutionContext, ensure_service_compartment_id, execute_oci, parse_oci_result_data
@@ -35,6 +36,8 @@ COMMAND_ALIASES = {
     "create_route_table": "create_route_table",
     "create-service-gateway": "create_service_gateway",
     "create_service_gateway": "create_service_gateway",
+    "add-nsg-rules": "add_nsg_rules",
+    "add_nsg_rules": "add_nsg_rules",
     "update-route-table": "update_route_table",
     "update_route_table": "update_route_table",
     "export-network-manifest": "export_network_manifest",
@@ -65,6 +68,7 @@ def main() -> int:
     parser.add_argument("--prohibit-public-ip-on-vnic", default="true")
     parser.add_argument("--description")
     parser.add_argument("--route-rule-json", action="append", default=[])
+    parser.add_argument("--security-rules-json")
     args = parser.parse_args()
 
     canonical_command = COMMAND_ALIASES[args.command]
@@ -136,6 +140,22 @@ def main() -> int:
                 args.nsg_name,
             ]
             oci_result = execute_oci(execution, "network", context, "create_nsg", command, args.oci_mode)
+        elif canonical_command == "add_nsg_rules":
+            if not args.nsg_id:
+                raise SystemExit("--nsg-id es requerido para add_nsg_rules en runtime oci")
+            if not args.security_rules_json:
+                raise SystemExit("--security-rules-json es requerido para add_nsg_rules en runtime oci")
+            command = [
+                "network",
+                "nsg",
+                "rules",
+                "add",
+                "--nsg-id",
+                args.nsg_id[0],
+                "--security-rules",
+                json.dumps(json.loads(args.security_rules_json), ensure_ascii=True),
+            ]
+            oci_result = execute_oci(execution, "network", context, "add_nsg_rules", command, args.oci_mode)
         elif canonical_command == "create_service_gateway":
             if not args.compartment_id or not args.vcn_id or not args.service_gateway_name or not args.service_id:
                 raise SystemExit(
@@ -293,6 +313,44 @@ def main() -> int:
                     "manifest_path": str(result),
                     "nsg_id": oci_data.get("id"),
                     "lifecycle_state": oci_data.get("lifecycle-state"),
+                },
+                indent=2,
+                ensure_ascii=True,
+            )
+        )
+        return 0
+
+    if canonical_command == "add_nsg_rules":
+        nsg_name = args.nsg_name or (args.nsg_id[0] if args.nsg_id else None)
+        if not nsg_name:
+            raise SystemExit("--nsg-name o --nsg-id es requerido para add_nsg_rules")
+        if not args.security_rules_json:
+            raise SystemExit("--security-rules-json es requerido para add_nsg_rules")
+        security_rules = json.loads(args.security_rules_json)
+        result = update_network_nsg(
+            context,
+            nsg_name,
+            {
+                "runtime": args.runtime,
+                "oci_mode": args.oci_mode if args.runtime == "oci" else None,
+                "compartment_id": args.compartment_id,
+                "vcn_name": args.vcn_name,
+                "vcn_id": args.vcn_id,
+                "nsg_id": args.nsg_id[0] if args.nsg_id else None,
+                "security_rules": security_rules,
+                "description": args.description,
+                "resource_id": args.nsg_id[0] if args.nsg_id else None,
+                "plan_path": oci_result.get("plan_path"),
+                "result_path": oci_result.get("result_path"),
+            },
+        )
+        print(
+            json.dumps(
+                {
+                    "status": "ok",
+                    "command": canonical_command,
+                    "manifest_path": str(result),
+                    "nsg_id": args.nsg_id[0] if args.nsg_id else None,
                 },
                 indent=2,
                 ensure_ascii=True,

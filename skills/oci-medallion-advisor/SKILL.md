@@ -27,6 +27,7 @@ Usa esta skill para convertir una solicitud abierta en un plan operable, guiado 
    - SQL y DDL heredado
    - scripts heredados o wrappers operativos
    - data fuente, CSV, Parquet, muestras o exports
+   - jars o dependencias de Data Flow cuando haya jobs Spark especiales, por ejemplo Iceberg para `silver_trusted`
    - documentacion funcional y documentacion de referencia
 8. cuando falte un insumo, indicar exactamente:
    - ruta
@@ -68,6 +69,7 @@ Hazlas de una en una y solo si son necesarias:
 - si el usuario ya tiene insumos en `workspace/migration-input/<project_id>/`
 - si ya tiene SQL, DDL y scripts heredados, y en que rutas exactas estan
 - si ya tiene archivos de data, CSV, Parquet, samples o exports, y en que rutas exactas estan
+- si ya tiene jars o dependencias de Data Flow para jobs Spark, especialmente `bronze-to-silver` o `silver-to-gold`, y en que rutas exactas estan
 - si ya tiene documentacion funcional o documentacion de referencia, y en que rutas exactas estan
 - si alguno de esos archivos se entregara despues, cual es el `source_path` actual y el `target_path` planeado
 - si ya tiene `.local/oci/config`, `.local/oci/key.pem` y wallet o si hay que stagearlos desde otra ruta

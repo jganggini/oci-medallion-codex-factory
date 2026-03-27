@@ -74,7 +74,7 @@ Trabaja asi:
 1. inspecciona el repo y detecta la etapa actual
 2. hazme preguntas una por una
 3. si falta un archivo, dime exactamente en que ruta debe ir y que contenido minimo esperas
-4. pregunta explicitamente por SQL, scripts heredados, data o csv/parquet y documentacion de referencia
+4. pregunta explicitamente por SQL, scripts heredados, data o csv/parquet, jars o dependencias de Data Flow y documentacion de referencia
 5. pide tambien la ruta exacta del OCI config, de la llave .pem y del wallet si aplica
 6. si te digo que luego te pasare archivos, exigeme la ruta exacta donde estan hoy y la ruta destino dentro de workspace/migration-input/<project_id>/ o .local/oci/ o .local/autonomous/wallets/<env>/<adb_name>/
 7. despues de cerrar el plan inicial, ejecuta el staging automatico para copiar los archivos a su ruta correcta antes del intake
@@ -93,7 +93,7 @@ Con ese prompt, Codex deberia ayudarte a:
 
 - identificar en que etapa del despliegue o migracion estas
 - decirte donde colocar los archivos del proyecto
-- pedirte SQL, scripts, data y documentacion de referencia como parte normal de la entrevista
+- pedirte SQL, scripts, data, jars o dependencias de Data Flow y documentacion de referencia como parte normal de la entrevista
 - pedirte la ruta actual de `config`, `.pem` y wallet cuando hagan falta
 - exigir la ruta actual y la ruta destino cuando prometas entregar archivos despues
 - ejecutar el staging automatico para mover los archivos a su ubicacion correcta antes del intake
@@ -120,12 +120,18 @@ powershell -ExecutionPolicy Bypass -File .\scripts\docker_stage_assets.ps1 `
   --data-source D:\fuentes\trafico\data `
   --docs-source D:\fuentes\trafico\docs `
   --references-source D:\fuentes\trafico\references `
+  --dataflow-job-name bronze-to-silver `
+  --dataflow-jar-source "D:\runtimes\dataflow\iceberg-spark-runtime-3.5_2.12-1.5.2.jar" `
+  --dataflow-job-name silver-to-gold `
+  --dataflow-jar-source "D:\runtimes\dataflow\iceberg-spark-runtime-3.5_2.12-1.5.2.jar" `
   --oci-config-source C:\Users\usuario\.oci\config `
   --oci-key-source C:\Users\usuario\.oci\oci_api_key.pem `
   --wallet-source D:\wallets\adb_trafico_gold `
   --environment dev `
   --adb-name adb_trafico_gold
 ```
+
+Cuando `silver_trusted` use Iceberg, stagea el jar en el job que escribe silver y, si `gold_refined` lee tablas Iceberg desde silver, tambien en `silver-to-gold`. El staging lo copia automaticamente a `workspace/generated/<project_id>/data_flow/dependencies/<job_name>/java/` y el deploy real lo empaqueta en `archive.zip` antes de crear la aplicacion de OCI Data Flow.
 
 ## Ejecucion de scripts y MCPs
 

@@ -606,6 +606,9 @@ def main() -> int:
     parser.add_argument("--connect-password")
     parser.add_argument("--connect-password-env")
     parser.add_argument("--compartment-id")
+    parser.add_argument("--subnet-id")
+    parser.add_argument("--nsg-id", action="append", default=[])
+    parser.add_argument("--private-endpoint-label")
     parser.add_argument("--db-name")
     parser.add_argument("--db-workload", default="DW")
     parser.add_argument("--compute-count", default="2")
@@ -669,6 +672,10 @@ def main() -> int:
         execution = OciExecutionContext(repo_root=context.repo_root, profile=args.oci_profile)
         if not args.compartment_id or not args.db_name:
             raise SystemExit("--compartment-id y --db-name son requeridos en runtime oci para create-adb-definition")
+        if bool(args.subnet_id) != bool(args.private_endpoint_label):
+            raise SystemExit("--subnet-id y --private-endpoint-label deben usarse juntos para create-adb-definition")
+        if args.nsg_id and not args.subnet_id:
+            raise SystemExit("--nsg-id requiere --subnet-id para create-adb-definition")
         ensure_service_compartment_id(args.compartment_id)
         admin_password = resolve_secret(args.admin_password, args.admin_password_env, ("DB_PASSWORD",))
         if args.secret_id and admin_password:
@@ -698,6 +705,12 @@ def main() -> int:
             "--is-mtls-connection-required",
             args.is_mtls_connection_required,
         ]
+        if args.subnet_id:
+            command.extend(["--subnet-id", args.subnet_id])
+        if args.nsg_id:
+            command.extend(["--nsg-ids", json.dumps(args.nsg_id, ensure_ascii=True)])
+        if args.private_endpoint_label:
+            command.extend(["--private-endpoint-label", args.private_endpoint_label])
         temp_json_path: Path | None = None
         if args.secret_id:
             command.extend(["--secret-id", args.secret_id])
@@ -722,6 +735,9 @@ def main() -> int:
                 "oci_mode": args.oci_mode,
                 "oci_profile": args.oci_profile,
                 "compartment_id": args.compartment_id,
+                "subnet_id": args.subnet_id,
+                "nsg_ids": args.nsg_id,
+                "private_endpoint_label": args.private_endpoint_label,
                 "db_name": args.db_name,
                 "display_name": args.display_name or args.database_name,
                 "db_workload": args.db_workload,
@@ -731,6 +747,9 @@ def main() -> int:
                 "db_version": args.db_version,
                 "autonomous_database_id": oci_data.get("id"),
                 "resource_state": oci_data.get("lifecycle-state"),
+                "private_endpoint": oci_data.get("private-endpoint"),
+                "private_endpoint_label": oci_data.get("private-endpoint-label") or args.private_endpoint_label,
+                "private_endpoint_ip": oci_data.get("private-endpoint-ip"),
                 "service_console_url": oci_data.get("service-console-url"),
                 "connection_strings": oci_data.get("connection-strings"),
                 "plan_path": result.get("plan_path"),
@@ -754,6 +773,9 @@ def main() -> int:
                     "manifest_path": str(manifest),
                     "autonomous_database_id": oci_data.get("id"),
                     "resource_state": oci_data.get("lifecycle-state"),
+                    "private_endpoint": oci_data.get("private-endpoint"),
+                    "private_endpoint_label": oci_data.get("private-endpoint-label") or args.private_endpoint_label,
+                    "private_endpoint_ip": oci_data.get("private-endpoint-ip"),
                     "plan_path": result.get("plan_path"),
                     "result_path": result.get("result_path"),
                     "control_paths": control_paths,

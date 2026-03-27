@@ -15,6 +15,8 @@ __pycache__/
 venv/
 .codex/config.toml
 workspace/oci-mirror/**/wallet.info.local.json
+workspace/oci-mirror/RUN.log
+workspace/oci-mirror/**/RUN.log
 workspace/migration-input/**/_inventory/
 workspace/generated/
 dist/

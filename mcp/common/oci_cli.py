@@ -10,7 +10,16 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
-from .runtime import MirrorContext, docker_mount_source, ensure_directory, is_relative_to, sanitize_name, utc_timestamp, write_json
+from .runtime import (
+    MirrorContext,
+    append_context_run_log,
+    docker_mount_source,
+    ensure_directory,
+    is_relative_to,
+    sanitize_name,
+    utc_timestamp,
+    write_json,
+)
 
 
 OCI_IMAGE = "ghcr.io/oracle/oci-cli:latest"
@@ -228,6 +237,17 @@ def execute_oci(
     plan_path = plan_dir / f"{utc_timestamp()}-{sanitize_name(operation)}.json"
     write_json(plan_path, payload)
     context.report(service_name, f"oci-{operation}-{apply_mode}", payload)
+    append_context_run_log(
+        context,
+        "OCI_OPERATION_PLANNED",
+        {
+            "service": service_name,
+            "operation": operation,
+            "apply_mode": apply_mode,
+            "status": "planned",
+            "plan_path": str(plan_path),
+        },
+    )
 
     if apply_mode == "plan":
         payload["plan_path"] = str(plan_path)
@@ -277,6 +297,21 @@ def execute_oci(
                 payload["waiter_bug_tolerated"] = True
     result_path = plan_dir / f"{utc_timestamp()}-{sanitize_name(operation)}-result.json"
     write_json(result_path, payload)
+    append_context_run_log(
+        context,
+        "OCI_OPERATION_COMPLETED" if result.returncode == 0 or waiter_bug_tolerated else "OCI_OPERATION_FAILED",
+        {
+            "service": service_name,
+            "operation": operation,
+            "apply_mode": apply_mode,
+            "status": "ok" if result.returncode == 0 or waiter_bug_tolerated else "error",
+            "plan_path": str(plan_path),
+            "result_path": str(result_path),
+            "return_code": payload["return_code"],
+            "waiter_bug_tolerated": waiter_bug_tolerated,
+            "stderr": result.stderr,
+        },
+    )
     if result.returncode != 0 and not waiter_bug_tolerated:
         raise RuntimeError(json.dumps({"message": "OCI CLI command failed", "result_path": str(result_path)}, ensure_ascii=True))
     payload["result_path"] = str(result_path)
