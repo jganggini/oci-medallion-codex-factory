@@ -153,6 +153,27 @@ def create_network_nsg(context: MirrorContext, nsg_name: str, metadata: dict[str
     return path
 
 
+def update_network_nsg(context: MirrorContext, nsg_name: str, metadata: dict[str, Any]) -> Path:
+    service_root = context.service_root("network")
+    path = ensure_directory(service_root / "nsgs") / f"{sanitize_name(nsg_name)}.json"
+    existing = read_json(path, default={})
+    payload = {
+        **existing,
+        "nsg_name": nsg_name,
+        "updated_at_utc": utc_timestamp(),
+        "extra": {
+            **existing.get("extra", {}),
+            **metadata,
+        },
+    }
+    if "created_at_utc" not in payload:
+        payload["created_at_utc"] = utc_timestamp()
+    write_json(path, payload)
+    _record_operation(service_root, context, "network", "update_nsg", payload)
+    export_network_manifest(context)
+    return path
+
+
 def create_network_route_table(context: MirrorContext, route_table_name: str, metadata: dict[str, Any]) -> Path:
     service_root = context.service_root("network")
     path = ensure_directory(service_root / "route_tables") / f"{sanitize_name(route_table_name)}.json"
@@ -177,6 +198,34 @@ def create_network_service_gateway(context: MirrorContext, service_gateway_name:
     }
     write_json(path, payload)
     _record_operation(service_root, context, "network", "create_service_gateway", payload)
+    export_network_manifest(context)
+    return path
+
+
+def create_network_internet_gateway(context: MirrorContext, internet_gateway_name: str, metadata: dict[str, Any]) -> Path:
+    service_root = context.service_root("network")
+    path = ensure_directory(service_root / "internet_gateways") / f"{sanitize_name(internet_gateway_name)}.json"
+    payload = {
+        "internet_gateway_name": internet_gateway_name,
+        "created_at_utc": utc_timestamp(),
+        "extra": metadata,
+    }
+    write_json(path, payload)
+    _record_operation(service_root, context, "network", "create_internet_gateway", payload)
+    export_network_manifest(context)
+    return path
+
+
+def create_network_nat_gateway(context: MirrorContext, nat_gateway_name: str, metadata: dict[str, Any]) -> Path:
+    service_root = context.service_root("network")
+    path = ensure_directory(service_root / "nat_gateways") / f"{sanitize_name(nat_gateway_name)}.json"
+    payload = {
+        "nat_gateway_name": nat_gateway_name,
+        "created_at_utc": utc_timestamp(),
+        "extra": metadata,
+    }
+    write_json(path, payload)
+    _record_operation(service_root, context, "network", "create_nat_gateway", payload)
     export_network_manifest(context)
     return path
 
@@ -211,6 +260,8 @@ def export_network_manifest(context: MirrorContext) -> Path:
         "subnets": _json_children(service_root / "subnets"),
         "nsgs": _json_children(service_root / "nsgs"),
         "service_gateways": _json_children(service_root / "service_gateways"),
+        "internet_gateways": _json_children(service_root / "internet_gateways"),
+        "nat_gateways": _json_children(service_root / "nat_gateways"),
         "route_tables": _json_children(service_root / "route_tables"),
     }
     return _write_service_manifest(service_root, "network.manifest.json", payload)
@@ -748,6 +799,19 @@ def collect_data_flow_run_report(context: MirrorContext, app_name: str, payload:
     write_json(report_path, report_payload)
     _record_operation(service_root, context, "data_flow", "collect_run_report", report_payload)
     return report_path
+
+
+def create_data_flow_private_endpoint(context: MirrorContext, endpoint_name: str, metadata: dict[str, Any]) -> Path:
+    service_root = ensure_directory(context.service_root("data_flow"))
+    path = ensure_directory(service_root / "private_endpoints") / f"{sanitize_name(endpoint_name)}.json"
+    payload = {
+        "private_endpoint_name": endpoint_name,
+        "created_at_utc": utc_timestamp(),
+        "metadata": metadata,
+    }
+    write_json(path, payload)
+    _record_operation(service_root, context, "data_flow", "create_private_endpoint", payload)
+    return path
 
 
 def collect_di_task_run_report(

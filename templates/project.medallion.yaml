@@ -1,6 +1,7 @@
 project_id: sample-project
 domain: generic-domain
 environment: dev
+network_mode: public
 deployment_scope: end_to_end_gold
 delivery_target: gold_adb
 migration_input_root: workspace/migration-input/sample-project
@@ -132,17 +133,31 @@ network_profile:
   compartment_name: data-medallion-dev
   compartment_id: ocid1.compartment.oc1..replace-me
   vcn_name: vcn-data-medallion-dev
-  subnet_strategy: private-by-service
+  shared_vcn_per_environment: true
+  subnet_strategy: shared-vcn-public-subnets
+  route_table_name: rt-data-medallion-dev
+  service_gateway_name: sgw-data-medallion-dev
+  internet_gateway_name: igw-data-medallion-dev
+  nat_gateway_name: nat-data-medallion-dev
+  object_storage_via_service_gateway: true
+  data_integration_workspace_private: false
+  autonomous_public_access_enabled: true
+  subnets:
+    data_integration:
+      name: subnet-di-dev
+      dns_label: disubnet
+    data_flow:
+      name: subnet-dataflow-dev
+      dns_label: dfsubnet
+    autonomous:
+      name: subnet-autonomous-dev
+      dns_label: adbsubnet
   private_endpoints:
-    data_flow: true
-    data_integration: true
-    autonomous: true
-    data_catalog: true
+    data_flow: false
+    autonomous: false
+    data_catalog: false
   nsgs:
-    - nsg-data-flow
-    - nsg-data-integration
-    - nsg-autonomous
-    - nsg-data-catalog
+    - nsg-private-services-dev
 
 control_plane:
   enabled: true
@@ -179,6 +194,10 @@ autonomous_profile:
   database_name: adb_sample_gold
   database_user: app_gold
   wallet_dir: .local/autonomous/wallets/dev/adb_sample_gold
+  private_endpoint_label: null
+  private_access_required: false
+  public_access_enabled: true
+  bootstrap_runner_requires_private_network_access: false
   load_strategy: single-writer-batch
   cold_history_strategy: hybrid-partitioned
   publish_objects:
@@ -209,12 +228,13 @@ di_pipeline:
   enabled: true
   workspace_name: di-medallion-dev
   application: medallion-orchestrator
+  private_workspace: false
   sync_lineage_with_data_catalog: true
 
 data_catalog:
   enabled: true
   catalog_name: dc-medallion-dev
-  private_endpoint_required: true
+  private_endpoint_required: false
   harvest_object_storage: true
   harvest_autonomous_database: true
   sync_data_integration: true

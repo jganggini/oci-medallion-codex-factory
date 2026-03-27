@@ -3,6 +3,7 @@ from __future__ import annotations
 import platform
 import shutil
 import subprocess
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -11,7 +12,6 @@ from .runtime import MirrorContext, append_jsonl, docker_mount_source, ensure_di
 
 AMD64_IMAGE = "phx.ocir.io/axmemlgtri2a/dataflow/dependency-packager-linux_x86_64:latest"
 ARM64_IMAGE = "phx.ocir.io/axmemlgtri2a/dataflow/dependency-packager-linux_arm64_v8:latest"
-LEGACY_IMAGE = "phx.ocir.io/oracle/dataflow/dependency-packager:latest"
 
 
 def detect_platform() -> str:
@@ -49,6 +49,8 @@ def build_packager_command(
         "--platform",
         default_docker_platform(target_platform),
         "--rm",
+        "--user",
+        "0:0",
         "-v",
         f"{dependency_mount_source}:/opt/dataflow",
         "--pull",
@@ -61,6 +63,48 @@ def build_packager_command(
     if validate_only:
         command.extend(["--validate", archive_name])
     return command
+
+
+def build_fallback_archive(dependency_root: Path, archive_path: Path) -> None:
+    version_file = dependency_root / "version.txt"
+    if not version_file.exists():
+        version_file.write_text(
+            "\n".join(
+                [
+                    "dependency_packager=factory-fallback",
+                    f"generated_at_utc={utc_timestamp()}",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+    if archive_path.exists():
+        archive_path.unlink()
+    with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for item in sorted(dependency_root.rglob("*")):
+            if not item.is_file():
+                continue
+            if item == archive_path or item.name == ".gitkeep":
+                continue
+            relative = item.relative_to(dependency_root)
+            relative_str = str(relative).replace("\\", "/")
+            if relative_str == "version.txt" or relative_str.startswith("python/") or relative_str.startswith("java/"):
+                archive.write(item, relative)
+
+
+def expected_archive_jar_members(dependency_root: Path) -> set[str]:
+    return {
+        str(item.relative_to(dependency_root)).replace("\\", "/")
+        for item in dependency_root.rglob("*.jar")
+        if item.is_file()
+    }
+
+
+def archive_contains_required_jars(archive_path: Path, required_members: set[str]) -> bool:
+    if not required_members:
+        return True
+    with zipfile.ZipFile(archive_path, "r") as archive:
+        return required_members.issubset(set(archive.namelist()))
 
 
 def package_dependency_archive(
@@ -76,6 +120,9 @@ def package_dependency_archive(
     dependency_root = dependency_root.resolve()
     if not dependency_root.exists():
         raise FileNotFoundError(f"No existe el directorio de dependencias: {dependency_root}")
+    archive_path = dependency_root / archive_name
+    if archive_path.exists():
+        archive_path.unlink()
 
     target_platform = target_platform or detect_platform()
     image = image or default_packager_image(target_platform)
@@ -93,7 +140,14 @@ def package_dependency_archive(
     if package_result.returncode != 0:
         raise RuntimeError(package_result.stderr or package_result.stdout)
 
-    archive_path = dependency_root / archive_name
+    archive_mode = "packager"
+    if not archive_path.exists():
+        build_fallback_archive(dependency_root, archive_path)
+        archive_mode = "fallback_local_zip"
+    required_jar_members = expected_archive_jar_members(dependency_root)
+    if archive_path.exists() and not archive_contains_required_jars(archive_path, required_jar_members):
+        build_fallback_archive(dependency_root, archive_path)
+        archive_mode = "fallback_local_zip_missing_jars"
     if not archive_path.exists():
         raise FileNotFoundError(f"El packager no genero {archive_name} en {dependency_root}")
 
@@ -127,6 +181,7 @@ def package_dependency_archive(
         "python_version": python_version,
         "image": image,
         "target_platform": target_platform,
+        "archive_mode": archive_mode,
         "created_at_utc": utc_timestamp(),
         "package_command": package_command,
         "package_stdout": package_result.stdout,

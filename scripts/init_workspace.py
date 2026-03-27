@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 from pathlib import Path
 
 
@@ -23,6 +24,7 @@ LAYER_BUCKETS = (
     "bucket-gold-refined",
 )
 MIGRATION_FOLDERS = ("sql", "scripts", "data", "docs", "references", "ddl", "samples", "exports", "mappings", "notes")
+DATAFLOW_DEPENDENCY_JOBS = ("landing-to-bronze", "bronze-to-silver", "silver-to-gold", "gold-loader")
 
 
 def ensure_file(path: Path, content: str = "") -> None:
@@ -33,6 +35,20 @@ def ensure_file(path: Path, content: str = "") -> None:
 
 def ensure_json(path: Path, payload: dict[str, object]) -> None:
     ensure_file(path, json.dumps(payload, indent=2, ensure_ascii=True) + "\n")
+
+
+def scaffold_dataflow_dependency_package(repo_root: Path, project_id: str, job_name: str) -> None:
+    template_root = repo_root / "templates" / "data_flow" / "dependency_package"
+    target_root = repo_root / "workspace" / "generated" / project_id / "data_flow" / "dependencies" / job_name
+    for item in sorted(template_root.rglob("*")):
+        relative = item.relative_to(template_root)
+        target = target_root / relative
+        if item.is_dir():
+            target.mkdir(parents=True, exist_ok=True)
+            continue
+        if not target.exists():
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(item, target)
 
 
 def init_local(repo_root: Path, project_id: str) -> None:
@@ -83,6 +99,7 @@ def init_local(repo_root: Path, project_id: str) -> None:
 
 def init_mirror(repo_root: Path) -> None:
     base = repo_root / "workspace" / "oci-mirror"
+    ensure_file(base / "RUN.log")
     ensure_file(
         base / "README.md",
         "\n".join(
@@ -91,6 +108,8 @@ def init_mirror(repo_root: Path) -> None:
                 "",
                 "Espejo local del estado publicado en OCI por ambiente, compartment y servicio.",
                 "No almacena secretos reales, wallets reales ni llaves privadas.",
+                "",
+                "- `RUN.log`: bitacora append-only de despliegues y ejecuciones OCI.",
             ]
         ),
     )
@@ -99,6 +118,8 @@ def init_mirror(repo_root: Path) -> None:
         env_root = base / env
         compartment_name = f"compartment-data-medallion-{env}"
         compartment_root = env_root / compartment_name
+        ensure_file(env_root / "RUN.log")
+        ensure_file(compartment_root / "RUN.log")
         ensure_json(
             env_root / "environment.manifest.json",
             {
@@ -155,6 +176,8 @@ def init_migration_input(repo_root: Path, project_id: str) -> None:
         ),
     )
     ensure_file(repo_root / "workspace" / "generated" / ".gitkeep")
+    for job_name in DATAFLOW_DEPENDENCY_JOBS:
+        scaffold_dataflow_dependency_package(repo_root, project_id, job_name)
 
 
 def main() -> int:

@@ -21,31 +21,33 @@ Usa esta skill para convertir una solicitud abierta en un plan operable, guiado 
    - validate
    - incident
 4. asumir por defecto un despliegue end-to-end hasta `gold_adb` en Autonomous Database
-5. no preguntar si el alcance es parcial o total salvo que el usuario ya haya restringido capas, servicios o entregables
-6. entrevistar al usuario con una sola pregunta material por turno
-7. preguntar explicitamente por estos insumos si aun no estan claros:
+5. aplicar por defecto `network_mode public` en `dev`, `hybrid` en `qa` y `private` en `prod`, salvo que el usuario pida otra cosa
+6. no preguntar si el alcance es parcial o total salvo que el usuario ya haya restringido capas, servicios o entregables
+7. entrevistar al usuario con una sola pregunta material por turno
+8. preguntar explicitamente por estos insumos si aun no estan claros:
    - SQL y DDL heredado
    - scripts heredados o wrappers operativos
    - data fuente, CSV, Parquet, muestras o exports
+   - jars o dependencias de Data Flow cuando haya jobs Spark especiales, por ejemplo Iceberg para `silver_trusted`
    - documentacion funcional y documentacion de referencia
-8. cuando falte un insumo, indicar exactamente:
+9. cuando falte un insumo, indicar exactamente:
    - ruta
    - archivo o carpeta esperada
    - si es obligatorio u opcional
    - contenido minimo esperado
-9. si el usuario dice que luego entregara archivos, exigir siempre:
+10. si el usuario dice que luego entregara archivos, exigir siempre:
    - `source_path` exacto donde estan hoy
    - `target_path` exacto dentro de `workspace/migration-input/<project_id>/...`, `.local/oci/` o `.local/autonomous/wallets/<env>/<adb_name>/`
    - tipo de insumo pendiente
-10. pedir explicitamente la ruta exacta de `config`, `.pem` y wallet cuando el entorno local aun no este listo
-11. si existen rutas fuente para esos archivos fuera del repo, ejecutar `scripts/docker_stage_assets.ps1` o `scripts/docker_stage_assets.sh` antes de intake o bootstrap
-12. preguntar explicitamente si ya existe algun bucket o source asset con informacion, a que capa pertenece y si la carga de archivos se hara por fuera de este flujo
-13. no asumir que un bucket poblado significa que ya existen todas las capas landing, bronze, silver, refined y gold
-14. confirmar si el proyecto necesita control plane, Data Catalog, lineage hibrido y reproceso por `run+slice`
-15. despues de cerrar discovery, presentar el plan inicial, stagear los archivos locales y levantar `docker compose up -d dev-base oci-runner dataflow-local` antes de intake, bootstrap, scaffold o publish si el runtime local todavia no esta arriba
-16. ejecutar scripts del repo y runtimes MCP con `scripts/docker_repo_python.ps1` o `scripts/docker_repo_python.sh`
-17. no pasar a `oci-mode apply` hasta confirmar credenciales locales, ambiente objetivo, region, OCIDs, private endpoints y wallets si aplican
-18. derivar al siguiente skill segun la etapa:
+11. pedir explicitamente la ruta exacta de `config`, `.pem` y wallet cuando el entorno local aun no este listo
+12. si existen rutas fuente para esos archivos fuera del repo, ejecutar `scripts/docker_stage_assets.ps1` o `scripts/docker_stage_assets.sh` antes de intake o bootstrap
+13. preguntar explicitamente si ya existe algun bucket o source asset con informacion, a que capa pertenece y si la carga de archivos se hara por fuera de este flujo
+14. no asumir que un bucket poblado significa que ya existen todas las capas landing, bronze, silver, refined y gold
+15. confirmar si el proyecto necesita control plane, Data Catalog, lineage hibrido y reproceso por `run+slice`
+16. despues de cerrar discovery, presentar el plan inicial, stagear los archivos locales y levantar `docker compose up -d dev-base oci-runner dataflow-local` antes de intake, bootstrap, scaffold o publish si el runtime local todavia no esta arriba
+17. ejecutar scripts del repo y runtimes MCP con `scripts/docker_repo_python.ps1` o `scripts/docker_repo_python.sh`
+18. no pasar a `oci-mode apply` hasta confirmar credenciales locales, ambiente objetivo, region, OCIDs, private endpoints y wallets si aplican
+19. derivar al siguiente skill segun la etapa:
    - `oci-medallion-migration-intake`
    - `oci-medallion-bootstrap`
    - `oci-medallion-network-foundation`
@@ -55,7 +57,7 @@ Usa esta skill para convertir una solicitud abierta en un plan operable, guiado 
    - `oci-terraform-fallback`
    - `oci-medallion-validate`
    - `oci-medallion-incident`
-19. cerrar cada etapa con:
+20. cerrar cada etapa con:
    - que quedo listo
    - que falta
    - siguiente paso concreto
@@ -68,10 +70,12 @@ Hazlas de una en una y solo si son necesarias:
 - si el usuario ya tiene insumos en `workspace/migration-input/<project_id>/`
 - si ya tiene SQL, DDL y scripts heredados, y en que rutas exactas estan
 - si ya tiene archivos de data, CSV, Parquet, samples o exports, y en que rutas exactas estan
+- si ya tiene jars o dependencias de Data Flow para jobs Spark, especialmente `bronze-to-silver` o `silver-to-gold`, y en que rutas exactas estan
 - si ya tiene documentacion funcional o documentacion de referencia, y en que rutas exactas estan
 - si alguno de esos archivos se entregara despues, cual es el `source_path` actual y el `target_path` planeado
 - si ya tiene `.local/oci/config`, `.local/oci/key.pem` y wallet o si hay que stagearlos desde otra ruta
 - si trabajara en `dev`, `qa` o `prod`
+- si quiere mantener el `network_mode` por defecto del ambiente o forzar otro
 - si ya existe algun bucket o source asset con datos
 - a que capa corresponde cada bucket existente: `landing_external`, `bronze_raw`, `silver_trusted`, `gold_refined` o `gold_adb`
 - si la carga de archivos al bucket se hara dentro del factory o por un proceso externo
@@ -90,5 +94,6 @@ Hazlas de una en una y solo si son necesarias:
 - plan de despliegue o migracion por etapas
 - `docker compose up -d dev-base oci-runner dataflow-local` programado o ejecutado inmediatamente despues del plan inicial
 - ruta base `landing_external -> bronze_raw -> silver_trusted -> gold_refined -> gold_adb` salvo restriccion explicita
+- `network_mode` resuelto y consistente con el ambiente o con el override del usuario
 - clasificacion clara de buckets existentes versus capas realmente creadas
 - estrategia de QA y reproceso por slice

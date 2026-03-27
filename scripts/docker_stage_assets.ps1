@@ -18,6 +18,7 @@ $PathOptions = @(
     "--exports-source",
     "--mappings-source",
     "--notes-source",
+    "--dataflow-jar-source",
     "--oci-config-source",
     "--oci-key-source",
     "--wallet-source"

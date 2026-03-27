@@ -14,6 +14,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PurePath
 from typing import Any, Callable
+from urllib.parse import urlparse
 
 
 CURRENT_FILE = Path(__file__).resolve()
@@ -26,6 +27,19 @@ if str(REPO_ROOT_DEFAULT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT_DEFAULT))
 
 from mcp.common.oci_cli import OciExecutionContext, _prepare_host_oci_dir, build_oci_command
+from mcp.common.local_services import (
+    create_data_flow_private_endpoint,
+    create_network_internet_gateway,
+    create_network_nat_gateway,
+    create_network_nsg,
+    create_network_route_table,
+    create_network_service_gateway,
+    create_network_subnet,
+    create_network_vcn,
+    update_network_nsg,
+    update_network_route_table,
+)
+from mcp.common.runtime import MirrorContext, append_run_log, mirror_run_log_paths
 
 GOLD_SAMPLE_CSV = textwrap.dedent(
     """\
@@ -79,11 +93,86 @@ class CommandError(RuntimeError):
         super().__init__(json.dumps(payload, ensure_ascii=True))
 
 
+NETWORK_MODE_DEFAULTS = {
+    "dev": "public",
+    "qa": "hybrid",
+    "prod": "private",
+}
+NETWORK_MODE_CHOICES = tuple(dict.fromkeys(NETWORK_MODE_DEFAULTS.values()))
+
+
+@dataclass(frozen=True)
+class NetworkModeProfile:
+    name: str
+    subnet_strategy: str
+    data_flow_private_endpoint_enabled: bool
+    data_integration_workspace_private: bool
+    autonomous_private_endpoint_enabled: bool
+    autonomous_public_access_enabled: bool
+    bootstrap_runner_requires_private_network_access: bool
+    object_storage_via_service_gateway: bool
+    nat_gateway_enabled: bool
+    internet_gateway_enabled: bool
+    subnet_prohibit_public_ip_on_vnic: bool
+
+
+def default_network_mode(environment: str) -> str:
+    return NETWORK_MODE_DEFAULTS[environment]
+
+
+def get_network_mode_profile(network_mode: str) -> NetworkModeProfile:
+    normalized = network_mode.strip().lower()
+    if normalized == "public":
+        return NetworkModeProfile(
+            name="public",
+            subnet_strategy="shared-vcn-public-subnets",
+            data_flow_private_endpoint_enabled=False,
+            data_integration_workspace_private=False,
+            autonomous_private_endpoint_enabled=False,
+            autonomous_public_access_enabled=True,
+            bootstrap_runner_requires_private_network_access=False,
+            object_storage_via_service_gateway=True,
+            nat_gateway_enabled=False,
+            internet_gateway_enabled=True,
+            subnet_prohibit_public_ip_on_vnic=False,
+        )
+    if normalized == "hybrid":
+        return NetworkModeProfile(
+            name="hybrid",
+            subnet_strategy="shared-vcn-private-subnets-nat",
+            data_flow_private_endpoint_enabled=False,
+            data_integration_workspace_private=True,
+            autonomous_private_endpoint_enabled=False,
+            autonomous_public_access_enabled=True,
+            bootstrap_runner_requires_private_network_access=False,
+            object_storage_via_service_gateway=True,
+            nat_gateway_enabled=True,
+            internet_gateway_enabled=False,
+            subnet_prohibit_public_ip_on_vnic=True,
+        )
+    if normalized == "private":
+        return NetworkModeProfile(
+            name="private",
+            subnet_strategy="shared-vcn-private-subnets",
+            data_flow_private_endpoint_enabled=True,
+            data_integration_workspace_private=True,
+            autonomous_private_endpoint_enabled=True,
+            autonomous_public_access_enabled=False,
+            bootstrap_runner_requires_private_network_access=True,
+            object_storage_via_service_gateway=True,
+            nat_gateway_enabled=False,
+            internet_gateway_enabled=False,
+            subnet_prohibit_public_ip_on_vnic=True,
+        )
+    raise ValueError(f"Modo de red no soportado: {network_mode}")
+
+
 @dataclass(frozen=True)
 class DeployNames:
     project_id: str
     tag: str
     environment: str
+    network_mode: str
     region: str
     namespace: str
     tenancy_id: str
@@ -117,10 +206,20 @@ class DeployNames:
     catalog_name: str
     catalog_asset_name: str
     vcn_name: str
+    service_gateway_name: str
+    internet_gateway_name: str
+    nat_gateway_name: str
     subnet_name: str
+    data_flow_subnet_name: str
+    autonomous_subnet_name: str
     nsg_name: str
     route_table_name: str
     dns_label: str
+    subnet_dns_label: str
+    data_flow_subnet_dns_label: str
+    autonomous_subnet_dns_label: str
+    data_flow_private_endpoint_name: str
+    adb_private_endpoint_label: str
     workflow_id: str
     run_id: str
     replay_run_id: str
@@ -504,7 +603,153 @@ def find_compartment_by_name(repo_root: Path, parent_compartment_id: str, compar
     return selected
 
 
-def build_names(repo_root: Path, project_id: str, environment: str, region: str, namespace: str, tenancy_id: str, tag: str) -> DeployNames:
+def find_named_oci_resource(
+    repo_root: Path,
+    command: list[str],
+    resource_name: str,
+    *,
+    name_keys: tuple[str, ...] = ("display-name", "name"),
+    deleted_states: tuple[str, ...] = ("TERMINATED", "TERMINATING", "DELETED"),
+) -> dict[str, Any] | None:
+    payload = run_oci_cli_json(repo_root, command, timeout_seconds=180)
+    matches: list[dict[str, Any]] = []
+    for item in payload.get("data", []):
+        if not isinstance(item, dict):
+            continue
+        item_name = next((str(item.get(key, "")).strip() for key in name_keys if str(item.get(key, "")).strip()), "")
+        if item_name != resource_name:
+            continue
+        lifecycle_state = str(item.get("lifecycle-state", item.get("state", ""))).upper()
+        if lifecycle_state in deleted_states:
+            continue
+        matches.append(item)
+    return matches[0] if matches else None
+
+
+def find_vcn_by_name(repo_root: Path, compartment_id: str, vcn_name: str) -> dict[str, Any] | None:
+    return find_named_oci_resource(
+        repo_root,
+        ["network", "vcn", "list", "--compartment-id", compartment_id, "--all"],
+        vcn_name,
+    )
+
+
+def find_route_table_by_name(repo_root: Path, compartment_id: str, vcn_id: str, route_table_name: str) -> dict[str, Any] | None:
+    return find_named_oci_resource(
+        repo_root,
+        ["network", "route-table", "list", "--compartment-id", compartment_id, "--vcn-id", vcn_id, "--all"],
+        route_table_name,
+    )
+
+
+def find_service_gateway_by_name(repo_root: Path, compartment_id: str, vcn_id: str, service_gateway_name: str) -> dict[str, Any] | None:
+    return find_named_oci_resource(
+        repo_root,
+        ["network", "service-gateway", "list", "--compartment-id", compartment_id, "--vcn-id", vcn_id, "--all"],
+        service_gateway_name,
+    )
+
+
+def find_internet_gateway_by_name(repo_root: Path, compartment_id: str, vcn_id: str, internet_gateway_name: str) -> dict[str, Any] | None:
+    return find_named_oci_resource(
+        repo_root,
+        ["network", "internet-gateway", "list", "--compartment-id", compartment_id, "--vcn-id", vcn_id, "--all"],
+        internet_gateway_name,
+    )
+
+
+def find_nat_gateway_by_name(repo_root: Path, compartment_id: str, vcn_id: str, nat_gateway_name: str) -> dict[str, Any] | None:
+    return find_named_oci_resource(
+        repo_root,
+        ["network", "nat-gateway", "list", "--compartment-id", compartment_id, "--vcn-id", vcn_id, "--all"],
+        nat_gateway_name,
+    )
+
+
+def find_nsg_by_name(repo_root: Path, compartment_id: str, vcn_id: str, nsg_name: str) -> dict[str, Any] | None:
+    return find_named_oci_resource(
+        repo_root,
+        ["network", "nsg", "list", "--compartment-id", compartment_id, "--vcn-id", vcn_id, "--all"],
+        nsg_name,
+    )
+
+
+def find_subnet_by_name(repo_root: Path, compartment_id: str, vcn_id: str, subnet_name: str) -> dict[str, Any] | None:
+    return find_named_oci_resource(
+        repo_root,
+        ["network", "subnet", "list", "--compartment-id", compartment_id, "--vcn-id", vcn_id, "--all"],
+        subnet_name,
+    )
+
+
+def find_data_flow_private_endpoint_by_name(repo_root: Path, compartment_id: str, endpoint_name: str) -> dict[str, Any] | None:
+    return find_named_oci_resource(
+        repo_root,
+        ["data-flow", "private-endpoint", "list", "--compartment-id", compartment_id, "--all"],
+        endpoint_name,
+    )
+
+
+def list_nsg_rules(repo_root: Path, nsg_id: str) -> list[dict[str, Any]]:
+    payload = run_oci_cli_json(repo_root, ["network", "nsg", "rules", "list", "--nsg-id", nsg_id, "--all"], timeout_seconds=180)
+    items = payload.get("data", [])
+    return [item for item in items if isinstance(item, dict)]
+
+
+def get_route_table_details(repo_root: Path, route_table_id: str) -> dict[str, Any]:
+    payload = run_oci_cli_json(repo_root, ["network", "route-table", "get", "--rt-id", route_table_id], timeout_seconds=180)
+    data = payload.get("data", {})
+    return data if isinstance(data, dict) else {}
+
+
+def canonical_json(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+
+
+def normalize_private_endpoint_host(value: str | None) -> str | None:
+    if not value:
+        return None
+    candidate = value.strip()
+    if not candidate:
+        return None
+    if "://" in candidate:
+        parsed = urlparse(candidate)
+        return parsed.hostname or candidate
+    if "/" in candidate:
+        parsed = urlparse(f"https://{candidate}")
+        return parsed.hostname or candidate.split("/", 1)[0]
+    return candidate
+
+
+def get_autonomous_database_details(repo_root: Path, autonomous_database_id: str) -> dict[str, Any]:
+    payload = run_oci_cli_json(
+        repo_root,
+        ["db", "autonomous-database", "get", "--autonomous-database-id", autonomous_database_id],
+        timeout_seconds=180,
+    )
+    data = payload.get("data", {})
+    return data if isinstance(data, dict) else {}
+
+
+def resolve_autonomous_private_endpoint(repo_root: Path, autonomous_database_id: str) -> str | None:
+    data = get_autonomous_database_details(repo_root, autonomous_database_id)
+    for key in ("private-endpoint", "private_endpoint", "private-endpoint-url", "private_endpoint_url"):
+        host = normalize_private_endpoint_host(str(data.get(key, "") or ""))
+        if host:
+            return host
+    return None
+
+
+def build_names(
+    repo_root: Path,
+    project_id: str,
+    environment: str,
+    network_mode: str,
+    region: str,
+    namespace: str,
+    tenancy_id: str,
+    tag: str,
+) -> DeployNames:
     suffix = f"{environment}-{tag}"
     project_slug = sanitize_token(project_id)
     compartment_name = f"data-medallion-{environment}"
@@ -513,13 +758,27 @@ def build_names(repo_root: Path, project_id: str, environment: str, region: str,
     workspace_name = f"ws-trafico-{suffix}"
     catalog_name = f"dc-trafico-{suffix}"
     wallet_dir = repo_root / ".local" / "autonomous" / "wallets" / environment / database_name
-    dns_label = ("trf" + tag[:9]).lower()[:15]
+    dns_label = f"mdl{environment}".lower()[:15]
     project_prefix = f"projects/{project_slug}"
     gold_object_name = f"{project_prefix}/exports/agg_resumen_archivos_trafico/process_date=2026-03-26/agg_resumen_archivos_trafico_sample.csv"
     landing_bucket = "bucket-landing-external"
     bronze_bucket = "bucket-bronze-raw"
     silver_bucket = "bucket-silver-trusted"
     gold_bucket = "bucket-gold-refined"
+    service_gateway_name = f"sgw-data-medallion-{environment}"
+    internet_gateway_name = f"igw-data-medallion-{environment}"
+    nat_gateway_name = f"nat-data-medallion-{environment}"
+    route_table_name = f"rt-data-medallion-{environment}"
+    vcn_name = f"vcn-data-medallion-{environment}"
+    subnet_name = f"subnet-di-{environment}"
+    data_flow_subnet_name = f"subnet-dataflow-{environment}"
+    autonomous_subnet_name = f"subnet-autonomous-{environment}"
+    nsg_name = f"nsg-private-services-{environment}"
+    subnet_dns_label = "disubnet"
+    data_flow_subnet_dns_label = "dfsubnet"
+    autonomous_subnet_dns_label = "adbsubnet"
+    data_flow_private_endpoint_name = f"dflow-pe-{suffix}"
+    adb_private_endpoint_label = ("adb" + re.sub(r"[^a-z0-9]+", "", tag.lower()))[:15]
     landing_root_uri = f"oci://{landing_bucket}@{namespace}/{project_prefix}/"
     bronze_root_uri = f"oci://{bronze_bucket}@{namespace}/{project_prefix}/"
     silver_root_uri = f"oci://{silver_bucket}@{namespace}/{project_prefix}/"
@@ -528,6 +787,7 @@ def build_names(repo_root: Path, project_id: str, environment: str, region: str,
         project_id=project_id,
         tag=tag,
         environment=environment,
+        network_mode=network_mode,
         region=region,
         namespace=namespace,
         tenancy_id=tenancy_id,
@@ -560,11 +820,21 @@ def build_names(repo_root: Path, project_id: str, environment: str, region: str,
         di_pipeline_name=f"trafico-orchestrator-{suffix}",
         catalog_name=catalog_name,
         catalog_asset_name=f"gold-refined-{suffix}",
-        vcn_name=f"vcn-trafico-{suffix}",
-        subnet_name=f"subnet-trafico-{suffix}",
-        nsg_name=f"nsg-trafico-{suffix}",
-        route_table_name=f"rt-trafico-{suffix}",
+        vcn_name=vcn_name,
+        service_gateway_name=service_gateway_name,
+        internet_gateway_name=internet_gateway_name,
+        nat_gateway_name=nat_gateway_name,
+        subnet_name=subnet_name,
+        data_flow_subnet_name=data_flow_subnet_name,
+        autonomous_subnet_name=autonomous_subnet_name,
+        nsg_name=nsg_name,
+        route_table_name=route_table_name,
         dns_label=dns_label,
+        subnet_dns_label=subnet_dns_label,
+        data_flow_subnet_dns_label=data_flow_subnet_dns_label,
+        autonomous_subnet_dns_label=autonomous_subnet_dns_label,
+        data_flow_private_endpoint_name=data_flow_private_endpoint_name,
+        adb_private_endpoint_label=adb_private_endpoint_label,
         workflow_id=f"wf-{project_id}",
         run_id=f"run-{project_id}-001",
         replay_run_id=f"run-{project_id}-002",
@@ -666,6 +936,650 @@ def collect_landing_samples(data_root: Path, project_prefix: str) -> list[tuple[
     return selected
 
 
+def ensure_shared_network_resources(repo_root: Path, mirror_context: MirrorContext, names: DeployNames, compartment_id: str) -> dict[str, Any]:
+    vcn_cidr = "10.42.0.0/16"
+    settings = get_network_mode_profile(names.network_mode)
+    object_storage_service = get_object_storage_service(repo_root)
+
+    def ensure_vcn() -> dict[str, Any]:
+        existing = find_vcn_by_name(repo_root, compartment_id, names.vcn_name)
+        if existing:
+            manifest = create_network_vcn(
+                mirror_context,
+                names.vcn_name,
+                [vcn_cidr],
+                {
+                    "runtime": "oci",
+                    "oci_mode": "reuse",
+                    "network_mode": names.network_mode,
+                    "compartment_id": compartment_id,
+                    "dns_label": names.dns_label,
+                    "resource_id": existing.get("id"),
+                    "lifecycle_state": existing.get("lifecycle-state"),
+                    "reused_existing": True,
+                },
+            )
+            return {
+                "manifest_path": str(manifest),
+                "vcn_id": existing.get("id"),
+                "lifecycle_state": existing.get("lifecycle-state"),
+                "reused_existing": True,
+            }
+        return call_mcp_json(
+            repo_root,
+            "oci-network-mcp",
+            [
+                "--environment",
+                names.environment,
+                "--runtime",
+                "oci",
+                "--oci-mode",
+                "apply",
+                "--command",
+                "create-vcn",
+                "--compartment-id",
+                compartment_id,
+                "--vcn-name",
+                names.vcn_name,
+                "--cidr-block",
+                vcn_cidr,
+                "--dns-label",
+                names.dns_label,
+            ],
+            timeout_seconds=900,
+        )
+
+    def ensure_route_table(vcn_id: str) -> dict[str, Any]:
+        existing = find_route_table_by_name(repo_root, compartment_id, vcn_id, names.route_table_name)
+        if existing:
+            manifest = create_network_route_table(
+                mirror_context,
+                names.route_table_name,
+                {
+                    "runtime": "oci",
+                    "oci_mode": "reuse",
+                    "network_mode": names.network_mode,
+                    "compartment_id": compartment_id,
+                    "vcn_name": names.vcn_name,
+                    "vcn_id": vcn_id,
+                    "resource_id": existing.get("id"),
+                    "lifecycle_state": existing.get("lifecycle-state"),
+                    "reused_existing": True,
+                },
+            )
+            return {
+                "manifest_path": str(manifest),
+                "route_table_id": existing.get("id"),
+                "lifecycle_state": existing.get("lifecycle-state"),
+                "reused_existing": True,
+            }
+        return call_mcp_json(
+            repo_root,
+            "oci-network-mcp",
+            [
+                "--environment",
+                names.environment,
+                "--runtime",
+                "oci",
+                "--oci-mode",
+                "apply",
+                "--command",
+                "create-route-table",
+                "--compartment-id",
+                compartment_id,
+                "--vcn-id",
+                vcn_id,
+                "--route-table-name",
+                names.route_table_name,
+            ],
+            timeout_seconds=900,
+        )
+
+    def ensure_service_gateway(vcn_id: str) -> dict[str, Any]:
+        existing = find_service_gateway_by_name(repo_root, compartment_id, vcn_id, names.service_gateway_name)
+        if existing:
+            manifest = create_network_service_gateway(
+                mirror_context,
+                names.service_gateway_name,
+                {
+                    "runtime": "oci",
+                    "oci_mode": "reuse",
+                    "network_mode": names.network_mode,
+                    "compartment_id": compartment_id,
+                    "vcn_name": names.vcn_name,
+                    "vcn_id": vcn_id,
+                    "service_ids": [object_storage_service["service_id"]],
+                    "resource_id": existing.get("id"),
+                    "lifecycle_state": existing.get("lifecycle-state"),
+                    "reused_existing": True,
+                },
+            )
+            return {
+                "manifest_path": str(manifest),
+                "service_gateway_id": existing.get("id"),
+                "lifecycle_state": existing.get("lifecycle-state"),
+                "reused_existing": True,
+            }
+        return call_mcp_json(
+            repo_root,
+            "oci-network-mcp",
+            [
+                "--environment",
+                names.environment,
+                "--runtime",
+                "oci",
+                "--oci-mode",
+                "apply",
+                "--command",
+                "create-service-gateway",
+                "--compartment-id",
+                compartment_id,
+                "--vcn-id",
+                vcn_id,
+                "--service-gateway-name",
+                names.service_gateway_name,
+                "--service-id",
+                object_storage_service["service_id"],
+            ],
+            timeout_seconds=900,
+        )
+
+    def ensure_internet_gateway(vcn_id: str) -> dict[str, Any] | None:
+        if not settings.internet_gateway_enabled:
+            return None
+        existing = find_internet_gateway_by_name(repo_root, compartment_id, vcn_id, names.internet_gateway_name)
+        if existing:
+            manifest = create_network_internet_gateway(
+                mirror_context,
+                names.internet_gateway_name,
+                {
+                    "runtime": "oci",
+                    "oci_mode": "reuse",
+                    "network_mode": names.network_mode,
+                    "compartment_id": compartment_id,
+                    "vcn_name": names.vcn_name,
+                    "vcn_id": vcn_id,
+                    "is_enabled": True,
+                    "resource_id": existing.get("id"),
+                    "lifecycle_state": existing.get("lifecycle-state"),
+                    "reused_existing": True,
+                },
+            )
+            return {
+                "manifest_path": str(manifest),
+                "internet_gateway_id": existing.get("id"),
+                "lifecycle_state": existing.get("lifecycle-state"),
+                "reused_existing": True,
+            }
+        return call_mcp_json(
+            repo_root,
+            "oci-network-mcp",
+            [
+                "--environment",
+                names.environment,
+                "--runtime",
+                "oci",
+                "--oci-mode",
+                "apply",
+                "--command",
+                "create-internet-gateway",
+                "--compartment-id",
+                compartment_id,
+                "--vcn-id",
+                vcn_id,
+                "--internet-gateway-name",
+                names.internet_gateway_name,
+                "--is-enabled",
+                "true",
+            ],
+            timeout_seconds=900,
+        )
+
+    def ensure_nat_gateway(vcn_id: str) -> dict[str, Any] | None:
+        if not settings.nat_gateway_enabled:
+            return None
+        existing = find_nat_gateway_by_name(repo_root, compartment_id, vcn_id, names.nat_gateway_name)
+        if existing:
+            manifest = create_network_nat_gateway(
+                mirror_context,
+                names.nat_gateway_name,
+                {
+                    "runtime": "oci",
+                    "oci_mode": "reuse",
+                    "network_mode": names.network_mode,
+                    "compartment_id": compartment_id,
+                    "vcn_name": names.vcn_name,
+                    "vcn_id": vcn_id,
+                    "resource_id": existing.get("id"),
+                    "lifecycle_state": existing.get("lifecycle-state"),
+                    "reused_existing": True,
+                },
+            )
+            return {
+                "manifest_path": str(manifest),
+                "nat_gateway_id": existing.get("id"),
+                "lifecycle_state": existing.get("lifecycle-state"),
+                "reused_existing": True,
+            }
+        return call_mcp_json(
+            repo_root,
+            "oci-network-mcp",
+            [
+                "--environment",
+                names.environment,
+                "--runtime",
+                "oci",
+                "--oci-mode",
+                "apply",
+                "--command",
+                "create-nat-gateway",
+                "--compartment-id",
+                compartment_id,
+                "--vcn-id",
+                vcn_id,
+                "--nat-gateway-name",
+                names.nat_gateway_name,
+            ],
+            timeout_seconds=900,
+        )
+
+    def ensure_private_services_nsg(vcn_id: str) -> dict[str, Any]:
+        existing = find_nsg_by_name(repo_root, compartment_id, vcn_id, names.nsg_name)
+        if existing:
+            manifest = create_network_nsg(
+                mirror_context,
+                names.nsg_name,
+                {
+                    "runtime": "oci",
+                    "oci_mode": "reuse",
+                    "network_mode": names.network_mode,
+                    "compartment_id": compartment_id,
+                    "vcn_name": names.vcn_name,
+                    "vcn_id": vcn_id,
+                    "resource_id": existing.get("id"),
+                    "lifecycle_state": existing.get("lifecycle-state"),
+                    "reused_existing": True,
+                },
+            )
+            return {
+                "manifest_path": str(manifest),
+                "nsg_id": existing.get("id"),
+                "lifecycle_state": existing.get("lifecycle-state"),
+                "reused_existing": True,
+            }
+        return call_mcp_json(
+            repo_root,
+            "oci-network-mcp",
+            [
+                "--environment",
+                names.environment,
+                "--runtime",
+                "oci",
+                "--oci-mode",
+                "apply",
+                "--command",
+                "create-nsg",
+                "--compartment-id",
+                compartment_id,
+                "--vcn-id",
+                vcn_id,
+                "--nsg-name",
+                names.nsg_name,
+            ],
+            timeout_seconds=900,
+        )
+
+    def ensure_subnet(subnet_name: str, cidr_block: str, dns_label: str) -> dict[str, Any]:
+        existing = find_subnet_by_name(repo_root, compartment_id, vcn["vcn_id"], subnet_name)
+        if existing:
+            manifest = create_network_subnet(
+                mirror_context,
+                subnet_name,
+                cidr_block,
+                {
+                    "runtime": "oci",
+                    "oci_mode": "reuse",
+                    "network_mode": names.network_mode,
+                    "compartment_id": compartment_id,
+                    "vcn_name": names.vcn_name,
+                    "vcn_id": vcn["vcn_id"],
+                    "dns_label": dns_label,
+                    "route_table_id": route_table["route_table_id"],
+                    "prohibit_public_ip_on_vnic": str(settings.subnet_prohibit_public_ip_on_vnic).lower(),
+                    "resource_id": existing.get("id"),
+                    "lifecycle_state": existing.get("lifecycle-state"),
+                    "reused_existing": True,
+                },
+            )
+            return {
+                "manifest_path": str(manifest),
+                "subnet_id": existing.get("id"),
+                "lifecycle_state": existing.get("lifecycle-state"),
+                "reused_existing": True,
+            }
+        return call_mcp_json(
+            repo_root,
+            "oci-network-mcp",
+            [
+                "--environment",
+                names.environment,
+                "--runtime",
+                "oci",
+                "--oci-mode",
+                "apply",
+                "--command",
+                "create-subnet",
+                "--compartment-id",
+                compartment_id,
+                "--vcn-id",
+                vcn["vcn_id"],
+                "--subnet-name",
+                subnet_name,
+                "--cidr-block",
+                cidr_block,
+                "--route-table-id",
+                route_table["route_table_id"],
+                "--dns-label",
+                dns_label,
+                "--prohibit-public-ip-on-vnic",
+                str(settings.subnet_prohibit_public_ip_on_vnic).lower(),
+            ],
+            timeout_seconds=900,
+        )
+
+    vcn = ensure_vcn()
+    route_table = ensure_route_table(vcn["vcn_id"])
+    service_gateway = ensure_service_gateway(vcn["vcn_id"])
+    internet_gateway = ensure_internet_gateway(vcn["vcn_id"])
+    nat_gateway = ensure_nat_gateway(vcn["vcn_id"])
+
+    current_route_table = get_route_table_details(repo_root, route_table["route_table_id"])
+    current_route_rules = [
+        rule
+        for rule in current_route_table.get("route-rules", [])
+        if isinstance(rule, dict)
+    ]
+    managed_route_rules: list[dict[str, Any]] = []
+    if settings.object_storage_via_service_gateway:
+        managed_route_rules.append(
+            {
+                "destination": object_storage_service["cidr_block"],
+                "destinationType": "SERVICE_CIDR_BLOCK",
+                "networkEntityId": service_gateway["service_gateway_id"],
+                "description": "object-storage-service-gateway",
+            }
+        )
+    if internet_gateway is not None:
+        managed_route_rules.append(
+            {
+                "destination": "0.0.0.0/0",
+                "destinationType": "CIDR_BLOCK",
+                "networkEntityId": internet_gateway["internet_gateway_id"],
+                "description": "public-internet-egress",
+            }
+        )
+    if nat_gateway is not None:
+        managed_route_rules.append(
+            {
+                "destination": "0.0.0.0/0",
+                "destinationType": "CIDR_BLOCK",
+                "networkEntityId": nat_gateway["nat_gateway_id"],
+                "description": "nat-internet-egress",
+            }
+        )
+    managed_route_descriptions = {str(rule.get("description", "")).strip() for rule in managed_route_rules}
+    merged_route_rules = [rule for rule in current_route_rules if str(rule.get("description", "")).strip() not in managed_route_descriptions]
+    merged_route_rules.extend(managed_route_rules)
+    if canonical_json(merged_route_rules) != canonical_json(current_route_rules):
+        route_table = call_mcp_json(
+            repo_root,
+            "oci-network-mcp",
+            [
+                "--environment",
+                names.environment,
+                "--runtime",
+                "oci",
+                "--oci-mode",
+                "apply",
+                "--command",
+                "update-route-table",
+                "--route-table-id",
+                route_table["route_table_id"],
+                "--route-table-name",
+                names.route_table_name,
+            ]
+            + [item for rule in merged_route_rules for item in ("--route-rule-json", json.dumps(rule, ensure_ascii=True))],
+            timeout_seconds=900,
+        )
+    else:
+        manifest = update_network_route_table(
+            mirror_context,
+            names.route_table_name,
+            {
+                "runtime": "oci",
+                "oci_mode": "reuse",
+                "network_mode": names.network_mode,
+                "compartment_id": compartment_id,
+                "vcn_name": names.vcn_name,
+                "vcn_id": vcn["vcn_id"],
+                "route_table_id": route_table["route_table_id"],
+                "route_rules_json": merged_route_rules,
+                "resource_id": route_table["route_table_id"],
+                "reused_existing": True,
+            },
+        )
+        route_table = {
+            **route_table,
+            "manifest_path": str(manifest),
+            "reused_existing": True,
+        }
+
+    nsg = ensure_private_services_nsg(vcn["vcn_id"])
+    existing_rule_descriptions = {
+        str(rule.get("description", "")).strip()
+        for rule in list_nsg_rules(repo_root, nsg["nsg_id"])
+        if isinstance(rule, dict)
+    }
+    required_nsg_rules = [
+        {
+            "direction": "INGRESS",
+            "protocol": "6",
+            "source": vcn_cidr,
+            "sourceType": "CIDR_BLOCK",
+            "isStateless": False,
+            "description": "allow-vcn-tcp-ingress",
+        },
+        {
+            "direction": "EGRESS",
+            "protocol": "6",
+            "destination": vcn_cidr,
+            "destinationType": "CIDR_BLOCK",
+            "isStateless": False,
+            "description": "allow-vcn-tcp-egress",
+        },
+        {
+            "direction": "EGRESS",
+            "protocol": "6",
+            "destination": object_storage_service["cidr_block"],
+            "destinationType": "SERVICE_CIDR_BLOCK",
+            "isStateless": False,
+            "description": "allow-objectstorage-https-egress",
+            "tcpOptions": {
+                "destinationPortRange": {
+                    "min": 443,
+                    "max": 443,
+                }
+            },
+        },
+    ]
+    if settings.internet_gateway_enabled or settings.nat_gateway_enabled:
+        required_nsg_rules.append(
+            {
+                "direction": "EGRESS",
+                "protocol": "6",
+                "destination": "0.0.0.0/0",
+                "destinationType": "CIDR_BLOCK",
+                "isStateless": False,
+                "description": "allow-public-https-egress",
+                "tcpOptions": {
+                    "destinationPortRange": {
+                        "min": 443,
+                        "max": 443,
+                    }
+                },
+            }
+        )
+    missing_nsg_rules = [rule for rule in required_nsg_rules if rule["description"] not in existing_rule_descriptions]
+    if missing_nsg_rules:
+        nsg_rules = call_mcp_json(
+            repo_root,
+            "oci-network-mcp",
+            [
+                "--environment",
+                names.environment,
+                "--runtime",
+                "oci",
+                "--oci-mode",
+                "apply",
+                "--command",
+                "add-nsg-rules",
+                "--nsg-name",
+                names.nsg_name,
+                "--nsg-id",
+                nsg["nsg_id"],
+                "--vcn-id",
+                vcn["vcn_id"],
+                "--security-rules-json",
+                json.dumps(missing_nsg_rules, ensure_ascii=True),
+            ],
+            timeout_seconds=900,
+        )
+    else:
+        manifest = update_network_nsg(
+            mirror_context,
+            names.nsg_name,
+            {
+                "runtime": "oci",
+                "oci_mode": "reuse",
+                "network_mode": names.network_mode,
+                "compartment_id": compartment_id,
+                "vcn_name": names.vcn_name,
+                "vcn_id": vcn["vcn_id"],
+                "nsg_id": nsg["nsg_id"],
+                "security_rules": required_nsg_rules,
+                "resource_id": nsg["nsg_id"],
+                "reused_existing": True,
+            },
+        )
+        nsg_rules = {
+            "manifest_path": str(manifest),
+            "nsg_id": nsg["nsg_id"],
+            "reused_existing": True,
+        }
+
+    di_subnet = ensure_subnet(names.subnet_name, "10.42.10.0/24", names.subnet_dns_label)
+    data_flow_subnet = ensure_subnet(names.data_flow_subnet_name, "10.42.20.0/24", names.data_flow_subnet_dns_label)
+    autonomous_subnet = ensure_subnet(names.autonomous_subnet_name, "10.42.30.0/24", names.autonomous_subnet_dns_label)
+
+    return {
+        "network_mode": names.network_mode,
+        "network_profile": {
+            "subnet_strategy": settings.subnet_strategy,
+            "data_flow_private_endpoint_enabled": settings.data_flow_private_endpoint_enabled,
+            "data_integration_workspace_private": settings.data_integration_workspace_private,
+            "autonomous_private_endpoint_enabled": settings.autonomous_private_endpoint_enabled,
+            "autonomous_public_access_enabled": settings.autonomous_public_access_enabled,
+            "object_storage_via_service_gateway": settings.object_storage_via_service_gateway,
+            "nat_gateway_enabled": settings.nat_gateway_enabled,
+            "internet_gateway_enabled": settings.internet_gateway_enabled,
+        },
+        "object_storage_service": object_storage_service,
+        "vcn": vcn,
+        "route_table": route_table,
+        "service_gateway": service_gateway,
+        "internet_gateway": internet_gateway,
+        "nat_gateway": nat_gateway,
+        "nsg": nsg,
+        "nsg_rules": nsg_rules,
+        "subnets": {
+            "data_integration": di_subnet,
+            "data_flow": data_flow_subnet,
+            "autonomous": autonomous_subnet,
+        },
+    }
+
+
+def ensure_data_flow_private_connectivity(
+    repo_root: Path,
+    mirror_context: MirrorContext,
+    names: DeployNames,
+    *,
+    compartment_id: str,
+    subnet_id: str,
+    nsg_id: str,
+    adb_private_endpoint: str,
+) -> dict[str, Any]:
+    dns_zone_host = normalize_private_endpoint_host(adb_private_endpoint)
+    if not dns_zone_host:
+        raise RuntimeError("No se pudo resolver el host privado de Autonomous Database para crear el private endpoint de Data Flow")
+
+    existing = find_data_flow_private_endpoint_by_name(repo_root, compartment_id, names.data_flow_private_endpoint_name)
+    if existing:
+        manifest = create_data_flow_private_endpoint(
+            mirror_context,
+            names.data_flow_private_endpoint_name,
+            {
+                "runtime": "oci",
+                "oci_mode": "reuse",
+                "compartment_id": compartment_id,
+                "subnet_id": subnet_id,
+                "nsg_ids": [nsg_id],
+                "dns_zones": [dns_zone_host],
+                "private_endpoint_id": existing.get("id"),
+                "lifecycle_state": existing.get("lifecycle-state"),
+                "reused_existing": True,
+            },
+        )
+        return {
+            "private_endpoint_manifest": str(manifest),
+            "private_endpoint_id": existing.get("id"),
+            "lifecycle_state": existing.get("lifecycle-state"),
+            "reused_existing": True,
+        }
+
+    return call_mcp_json(
+        repo_root,
+        "oci-data-flow-mcp",
+        [
+            "--environment",
+            names.environment,
+            "--runtime",
+            "oci",
+            "--oci-mode",
+            "apply",
+            "--command",
+            "create-private-endpoint",
+            "--private-endpoint-name",
+            names.data_flow_private_endpoint_name,
+            "--compartment-id",
+            compartment_id,
+            "--subnet-id",
+            subnet_id,
+            "--dns-zones-json",
+            json.dumps([dns_zone_host], ensure_ascii=True),
+            "--nsg-id",
+            nsg_id,
+            "--wait-for-state",
+            "ACTIVE",
+            "--max-wait-seconds",
+            "2400",
+            "--wait-interval-seconds",
+            "30",
+        ],
+        timeout_seconds=3000,
+    )
+
+
 def choose_high_dsn(wallet_dir: Path) -> str:
     tnsnames = wallet_dir / "tnsnames.ora"
     if not tnsnames.exists():
@@ -686,6 +1600,21 @@ def choose_high_dsn(wallet_dir: Path) -> str:
     if aliases:
         return aliases[0]
     raise RuntimeError(f"No se encontraron aliases TNS en {tnsnames}")
+
+
+def ensure_dataflow_dependency_root(repo_root: Path, project_id: str, application_name: str) -> Path:
+    template_root = repo_root / "templates" / "data_flow" / "dependency_package"
+    target_root = repo_root / "workspace" / "generated" / project_id / "data_flow" / "dependencies" / application_name
+    for item in sorted(template_root.rglob("*")):
+        relative = item.relative_to(template_root)
+        target = target_root / relative
+        if item.is_dir():
+            target.mkdir(parents=True, exist_ok=True)
+            continue
+        if not target.exists():
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(item, target)
+    return target_root
 
 
 def write_quality_assets(project_root: Path, names: DeployNames) -> dict[str, str]:
@@ -902,11 +1831,15 @@ def write_quality_assets(project_root: Path, names: DeployNames) -> dict[str, st
 
 
 def render_manifest(names: DeployNames, *, compartment_id: str, workspace_id: str, catalog_id: str) -> str:
+    network_profile = get_network_mode_profile(names.network_mode)
+    data_flow_private_endpoint_name = names.data_flow_private_endpoint_name if network_profile.data_flow_private_endpoint_enabled else "null"
+    adb_private_endpoint_label = names.adb_private_endpoint_label if network_profile.autonomous_private_endpoint_enabled else "null"
     return textwrap.dedent(
         f"""\
         project_id: {names.project_id}
         domain: trafico
         environment: {names.environment}
+        network_mode: {names.network_mode}
         deployment_scope: end_to_end_gold
         delivery_target: gold_adb
         migration_input_root: workspace/migration-input/{names.project_id}
@@ -937,8 +1870,8 @@ def render_manifest(names: DeployNames, *, compartment_id: str, workspace_id: st
           - compartment
           - iam_policies
           - storage_layers
-          - autonomous
           - network
+          - autonomous
           - landing_ingestion
           - data_flow
           - data_integration
@@ -1003,11 +1936,28 @@ def render_manifest(names: DeployNames, *, compartment_id: str, workspace_id: st
           compartment_name: {names.compartment_name}
           compartment_id: {compartment_id}
           vcn_name: {names.vcn_name}
-          subnet_strategy: private-by-service
+          shared_vcn_per_environment: true
+          subnet_strategy: {network_profile.subnet_strategy}
+          route_table_name: {names.route_table_name}
+          service_gateway_name: {names.service_gateway_name}
+          internet_gateway_name: {names.internet_gateway_name}
+          nat_gateway_name: {names.nat_gateway_name}
+          object_storage_via_service_gateway: {str(network_profile.object_storage_via_service_gateway).lower()}
+          data_integration_workspace_private: {str(network_profile.data_integration_workspace_private).lower()}
+          autonomous_public_access_enabled: {str(network_profile.autonomous_public_access_enabled).lower()}
+          subnets:
+            data_integration:
+              name: {names.subnet_name}
+              dns_label: {names.subnet_dns_label}
+            data_flow:
+              name: {names.data_flow_subnet_name}
+              dns_label: {names.data_flow_subnet_dns_label}
+            autonomous:
+              name: {names.autonomous_subnet_name}
+              dns_label: {names.autonomous_subnet_dns_label}
           private_endpoints:
-            data_flow: true
-            data_integration: true
-            autonomous: true
+            data_flow: {str(network_profile.data_flow_private_endpoint_enabled).lower()}
+            autonomous: {str(network_profile.autonomous_private_endpoint_enabled).lower()}
             data_catalog: false
           nsgs:
             - {names.nsg_name}
@@ -1026,6 +1976,11 @@ def render_manifest(names: DeployNames, *, compartment_id: str, workspace_id: st
           database_name: {names.database_name}
           database_user: {names.database_user}
           wallet_dir: .local/autonomous/wallets/{names.environment}/{names.database_name}
+          subnet_name: {names.autonomous_subnet_name}
+          private_endpoint_label: {adb_private_endpoint_label}
+          private_access_required: {str(network_profile.autonomous_private_endpoint_enabled).lower()}
+          public_access_enabled: {str(network_profile.autonomous_public_access_enabled).lower()}
+          bootstrap_runner_requires_private_network_access: {str(network_profile.bootstrap_runner_requires_private_network_access).lower()}
           load_strategy: single-writer-batch
           cold_history_strategy: hybrid-partitioned
           publish_objects:
@@ -1036,14 +1991,17 @@ def render_manifest(names: DeployNames, *, compartment_id: str, workspace_id: st
             enabled: true
             layer_from: landing_external
             layer_to: bronze_raw
+            private_endpoint_name: {data_flow_private_endpoint_name}
           - name: bronze_to_silver_{names.tag}
             enabled: true
             layer_from: bronze_raw
             layer_to: silver_trusted
+            private_endpoint_name: {data_flow_private_endpoint_name}
           - name: silver_to_gold_{names.tag}
             enabled: true
             layer_from: silver_trusted
             layer_to: gold_refined
+            private_endpoint_name: {data_flow_private_endpoint_name}
           - name: gold_loader_{names.tag}
             enabled: true
             target: gold_adb
@@ -1056,6 +2014,8 @@ def render_manifest(names: DeployNames, *, compartment_id: str, workspace_id: st
           enabled: true
           workspace_name: {names.workspace_name}
           application: {names.di_pipeline_name}
+          subnet_name: {names.subnet_name}
+          private_workspace: {str(network_profile.data_integration_workspace_private).lower()}
           sync_lineage_with_data_catalog: true
 
         data_catalog:
@@ -1326,6 +2286,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Ejecuta un despliegue OCI real end-to-end usando .test como insumo canonico.")
     parser.add_argument("--repo-root", default=str(REPO_ROOT_DEFAULT))
     parser.add_argument("--environment", default="dev", choices=("dev", "qa", "prod"))
+    parser.add_argument("--network-mode", choices=NETWORK_MODE_CHOICES)
     parser.add_argument("--project-id", default="trafico-real-oci")
     parser.add_argument("--test-root", default=".test")
     parser.add_argument("--tag")
@@ -1341,24 +2302,58 @@ def main() -> int:
     profile = load_oci_profile(repo_root)
     namespace = get_namespace(repo_root)
     tag = choose_tag(args.tag)
-    names = build_names(repo_root, args.project_id, args.environment, profile["region"], namespace, profile["tenancy_id"], tag)
+    network_mode = args.network_mode or default_network_mode(args.environment)
+    names = build_names(
+        repo_root,
+        args.project_id,
+        args.environment,
+        network_mode,
+        profile["region"],
+        namespace,
+        profile["tenancy_id"],
+        tag,
+    )
+    mirror_context = MirrorContext(repo_root=repo_root, environment=names.environment)
+    deployment_session_id = f"{utc_timestamp()}-{sanitize_token(names.project_id)}-{names.environment}-{names.tag}"
     os.environ["OCI_MEDALLION_MIRROR_COMPARTMENT_NAME"] = names.compartment_name
     os.environ["OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING"] = "True"
+    os.environ["OCI_MEDALLION_DEPLOYMENT_ID"] = deployment_session_id
+    os.environ["OCI_MEDALLION_DEPLOYMENT_PROJECT_ID"] = names.project_id
+    os.environ["OCI_MEDALLION_DEPLOYMENT_RUN_ID"] = names.run_id
+    os.environ["OCI_MEDALLION_DEPLOYMENT_ENVIRONMENT"] = names.environment
+    os.environ["OCI_MEDALLION_DEPLOYMENT_NETWORK_MODE"] = names.network_mode
+    os.environ["OCI_MEDALLION_DEPLOYMENT_TAG"] = names.tag
 
     project_root = repo_root / "workspace" / "migration-input" / names.project_id
     inventory_root = ensure_directory(project_root / "_inventory")
     report_path = inventory_root / "real-deploy-report.json"
     vars_path = inventory_root / "real-deploy-vars.json"
+    deployment_log_paths = mirror_run_log_paths(repo_root, names.environment, names.compartment_name)
 
     steps: list[dict[str, Any]] = []
     warnings: list[str] = []
     ids: dict[str, Any] = {}
+    network_settings = get_network_mode_profile(names.network_mode)
     artifacts: dict[str, Any] = {
         "repo_root": str(repo_root),
         "test_root": str(test_root),
         "project_root": str(project_root),
+        "deployment_session_id": deployment_session_id,
+        "run_log_paths": [str(path) for path in deployment_log_paths],
         "sensitive_users": sensitive,
     }
+    append_run_log(
+        deployment_log_paths,
+        "DEPLOYMENT_STARTED",
+        {
+            "status": "running",
+            "compartment_name": names.compartment_name,
+            "workflow_id": names.workflow_id,
+            "report_path": str(report_path),
+            "project_root": str(project_root),
+            "test_root": str(test_root),
+        },
+    )
 
     def flush_report(status: str, error: str | None = None) -> None:
         payload = {
@@ -1378,19 +2373,52 @@ def main() -> int:
             "name": step_name,
             "started_at_utc": utc_timestamp(),
         }
+        started_at = time.perf_counter()
+        append_run_log(
+            deployment_log_paths,
+            "STEP_STARTED",
+            {
+                "step": step_name,
+                "status": "running",
+            },
+        )
         try:
             result = action()
+            duration_seconds = round(time.perf_counter() - started_at, 3)
             entry["status"] = "ok"
             entry["finished_at_utc"] = utc_timestamp()
+            entry["duration_seconds"] = duration_seconds
             entry["output"] = result
             steps.append(entry)
+            append_run_log(
+                deployment_log_paths,
+                "STEP_COMPLETED",
+                {
+                    "step": step_name,
+                    "status": "ok",
+                    "duration_seconds": duration_seconds,
+                    "details": result,
+                },
+            )
             flush_report("running")
             return result
         except Exception as exc:
+            duration_seconds = round(time.perf_counter() - started_at, 3)
             entry["status"] = "error"
             entry["finished_at_utc"] = utc_timestamp()
+            entry["duration_seconds"] = duration_seconds
             entry["error"] = str(exc)
             steps.append(entry)
+            append_run_log(
+                deployment_log_paths,
+                "STEP_FAILED",
+                {
+                    "step": step_name,
+                    "status": "error",
+                    "duration_seconds": duration_seconds,
+                    "error": str(exc),
+                },
+            )
             flush_report("failed", str(exc))
             raise
 
@@ -1758,47 +2786,105 @@ def main() -> int:
 
         record_step("upload_landing_samples", upload_landing_samples)
 
+        network_result = record_step(
+            "create_network_foundation",
+            lambda: ensure_shared_network_resources(repo_root, mirror_context, names, ids["compartment_id"]),
+        )
+        ids["vcn_id"] = network_result["vcn"]["vcn_id"]
+        ids["route_table_id"] = network_result["route_table"]["route_table_id"]
+        ids["service_gateway_id"] = network_result["service_gateway"]["service_gateway_id"]
+        ids["internet_gateway_id"] = (network_result.get("internet_gateway") or {}).get("internet_gateway_id")
+        ids["nat_gateway_id"] = (network_result.get("nat_gateway") or {}).get("nat_gateway_id")
+        ids["nsg_id"] = network_result["nsg"]["nsg_id"]
+        ids["data_integration_subnet_id"] = network_result["subnets"]["data_integration"]["subnet_id"]
+        ids["subnet_id"] = ids["data_integration_subnet_id"]
+        ids["data_flow_subnet_id"] = network_result["subnets"]["data_flow"]["subnet_id"]
+        ids["autonomous_subnet_id"] = network_result["subnets"]["autonomous"]["subnet_id"]
+
         create_adb_result = record_step(
             "create_autonomous_database",
             lambda: call_mcp_json(
                 repo_root,
                 "oci-autonomous-database-mcp",
-                [
-                    "--environment",
-                    names.environment,
-                    "--runtime",
-                    "oci",
-                    "--oci-mode",
-                    "apply",
-                    "--command",
-                    "create-autonomous-database",
-                    "--database-name",
-                    names.database_name,
-                    "--database-user",
-                    names.database_user,
-                    "--compartment-id",
-                    ids["compartment_id"],
-                    "--db-name",
-                    names.adb_db_name,
-                    "--display-name",
-                    names.adb_display_name,
-                    "--compute-count",
-                    "2",
-                    "--compute-model",
-                    "ECPU",
-                    "--data-storage-size-in-tbs",
-                    "1",
-                    "--wait-for-state",
-                    "AVAILABLE",
-                    "--max-wait-seconds",
-                    "7200",
-                    "--wait-interval-seconds",
-                    "30",
-                ],
+                (
+                    [
+                        "--environment",
+                        names.environment,
+                        "--runtime",
+                        "oci",
+                        "--oci-mode",
+                        "apply",
+                        "--command",
+                        "create-autonomous-database",
+                        "--database-name",
+                        names.database_name,
+                        "--database-user",
+                        names.database_user,
+                        "--compartment-id",
+                        ids["compartment_id"],
+                        "--db-name",
+                        names.adb_db_name,
+                        "--display-name",
+                        names.adb_display_name,
+                        "--compute-count",
+                        "2",
+                        "--compute-model",
+                        "ECPU",
+                        "--data-storage-size-in-tbs",
+                        "1",
+                        "--wait-for-state",
+                        "AVAILABLE",
+                        "--max-wait-seconds",
+                        "7200",
+                        "--wait-interval-seconds",
+                        "30",
+                    ]
+                    + (
+                    [
+                        "--subnet-id",
+                        ids["autonomous_subnet_id"],
+                        "--nsg-id",
+                        ids["nsg_id"],
+                        "--private-endpoint-label",
+                        names.adb_private_endpoint_label,
+                    ]
+                    if network_settings.autonomous_private_endpoint_enabled
+                    else []
+                    )
+                ),
                 timeout_seconds=7500,
             ),
         )
         ids["autonomous_database_id"] = create_adb_result["autonomous_database_id"]
+        ids["adb_private_endpoint"] = None
+        if network_settings.autonomous_private_endpoint_enabled:
+            ids["adb_private_endpoint"] = create_adb_result.get("private_endpoint") or resolve_autonomous_private_endpoint(
+                repo_root,
+                ids["autonomous_database_id"],
+            )
+            if not ids.get("adb_private_endpoint"):
+                raise RuntimeError("No se pudo resolver el private endpoint de Autonomous Database despues del aprovisionamiento")
+        if network_settings.bootstrap_runner_requires_private_network_access:
+            warnings.append(
+                "Autonomous Database fue aprovisionada con private endpoint; el bootstrap SQL desde el runner requiere conectividad privada hacia la VCN del ambiente."
+            )
+
+        ids["data_flow_private_endpoint_id"] = None
+        if network_settings.data_flow_private_endpoint_enabled:
+            data_flow_private_endpoint_result = record_step(
+                "create_data_flow_private_endpoint",
+                lambda: ensure_data_flow_private_connectivity(
+                    repo_root,
+                    mirror_context,
+                    names,
+                    compartment_id=ids["compartment_id"],
+                    subnet_id=ids["data_flow_subnet_id"],
+                    nsg_id=ids["nsg_id"],
+                    adb_private_endpoint=str(ids["adb_private_endpoint"]),
+                ),
+            )
+            ids["data_flow_private_endpoint_id"] = data_flow_private_endpoint_result["private_endpoint_id"]
+            artifacts["data_flow_private_endpoint_manifest"] = data_flow_private_endpoint_result.get("private_endpoint_manifest")
 
         wallet_result = record_step(
             "download_wallet",
@@ -1939,182 +3025,22 @@ def main() -> int:
             ),
         )
 
-        def create_network_resources() -> dict[str, Any]:
-            object_storage_service = get_object_storage_service(repo_root)
-            vcn = call_mcp_json(
-                repo_root,
-                "oci-network-mcp",
-                [
-                    "--environment",
-                    names.environment,
-                    "--runtime",
-                    "oci",
-                    "--oci-mode",
-                    "apply",
-                    "--command",
-                    "create-vcn",
-                    "--compartment-id",
-                    ids["compartment_id"],
-                    "--vcn-name",
-                    names.vcn_name,
-                    "--cidr-block",
-                    "10.42.0.0/16",
-                    "--dns-label",
-                    names.dns_label,
-                ],
-                timeout_seconds=900,
-            )
-            route_table = call_mcp_json(
-                repo_root,
-                "oci-network-mcp",
-                [
-                    "--environment",
-                    names.environment,
-                    "--runtime",
-                    "oci",
-                    "--oci-mode",
-                    "apply",
-                    "--command",
-                    "create-route-table",
-                    "--compartment-id",
-                    ids["compartment_id"],
-                    "--vcn-id",
-                    vcn["vcn_id"],
-                    "--route-table-name",
-                    names.route_table_name,
-                ],
-                timeout_seconds=900,
-            )
-            service_gateway = call_mcp_json(
-                repo_root,
-                "oci-network-mcp",
-                [
-                    "--environment",
-                    names.environment,
-                    "--runtime",
-                    "oci",
-                    "--oci-mode",
-                    "apply",
-                    "--command",
-                    "create-service-gateway",
-                    "--compartment-id",
-                    ids["compartment_id"],
-                    "--vcn-id",
-                    vcn["vcn_id"],
-                    "--service-gateway-name",
-                    f"sgw-trafico-{names.environment}-{names.tag}",
-                    "--service-id",
-                    object_storage_service["service_id"],
-                ],
-                timeout_seconds=900,
-            )
-            route_table = call_mcp_json(
-                repo_root,
-                "oci-network-mcp",
-                [
-                    "--environment",
-                    names.environment,
-                    "--runtime",
-                    "oci",
-                    "--oci-mode",
-                    "apply",
-                    "--command",
-                    "update-route-table",
-                    "--route-table-id",
-                    route_table["route_table_id"],
-                    "--route-table-name",
-                    names.route_table_name,
-                    "--route-rule-json",
-                    json.dumps(
-                        {
-                            "destination": object_storage_service["cidr_block"],
-                            "destinationType": "SERVICE_CIDR_BLOCK",
-                            "networkEntityId": service_gateway["service_gateway_id"],
-                            "description": "Object Storage access for private Data Integration and Data Flow",
-                        },
-                        ensure_ascii=True,
-                    ),
-                ],
-                timeout_seconds=900,
-            )
-            nsg = call_mcp_json(
-                repo_root,
-                "oci-network-mcp",
-                [
-                    "--environment",
-                    names.environment,
-                    "--runtime",
-                    "oci",
-                    "--oci-mode",
-                    "apply",
-                    "--command",
-                    "create-nsg",
-                    "--compartment-id",
-                    ids["compartment_id"],
-                    "--vcn-id",
-                    vcn["vcn_id"],
-                    "--nsg-name",
-                    names.nsg_name,
-                ],
-                timeout_seconds=900,
-            )
-            subnet = call_mcp_json(
-                repo_root,
-                "oci-network-mcp",
-                [
-                    "--environment",
-                    names.environment,
-                    "--runtime",
-                    "oci",
-                    "--oci-mode",
-                    "apply",
-                    "--command",
-                    "create-subnet",
-                    "--compartment-id",
-                    ids["compartment_id"],
-                    "--vcn-id",
-                    vcn["vcn_id"],
-                    "--subnet-name",
-                    names.subnet_name,
-                    "--cidr-block",
-                    "10.42.10.0/24",
-                    "--route-table-id",
-                    route_table["route_table_id"],
-                    "--nsg-id",
-                    nsg["nsg_id"],
-                    "--dns-label",
-                    "trfsubnet",
-                ],
-                timeout_seconds=900,
-            )
-            ids["vcn_id"] = vcn["vcn_id"]
-            ids["route_table_id"] = route_table["route_table_id"]
-            ids["service_gateway_id"] = service_gateway["service_gateway_id"]
-            ids["nsg_id"] = nsg["nsg_id"]
-            ids["subnet_id"] = subnet["subnet_id"]
-            return {
-                "vcn": vcn,
-                "route_table": route_table,
-                "service_gateway": service_gateway,
-                "nsg": nsg,
-                "subnet": subnet,
-            }
-
-        record_step("create_network_foundation", create_network_resources)
-
         dataflow_apps = [
             {
                 "application_name": f"landing-to-bronze-{names.tag}",
+                "dependency_job_name": "landing-to-bronze",
                 "source_layer": "landing_external",
                 "target_layer": "bronze_raw",
             },
             {
                 "application_name": f"bronze-to-silver-{names.tag}",
+                "dependency_job_name": "bronze-to-silver",
                 "source_layer": "bronze_raw",
                 "target_layer": "silver_trusted",
             },
             {
                 "application_name": f"silver-to-gold-{names.tag}",
+                "dependency_job_name": "silver-to-gold",
                 "source_layer": "silver_trusted",
                 "target_layer": "gold_refined",
             },
@@ -2125,7 +3051,44 @@ def main() -> int:
             source_file = repo_root / "templates" / "data_flow" / "minimal_app" / "main.py"
             for app in dataflow_apps:
                 object_name = f"{names.project_prefix}/apps/{app['application_name']}/main.py"
-                results[app["application_name"]] = retry(
+                dependency_root = ensure_dataflow_dependency_root(
+                    repo_root,
+                    names.project_id,
+                    str(app["dependency_job_name"]),
+                )
+                package_result = call_mcp_json(
+                    repo_root,
+                    "oci-data-flow-mcp",
+                    [
+                        "--environment",
+                        names.environment,
+                        "--command",
+                        "package-dependencies",
+                        "--application-name",
+                        app["application_name"],
+                        "--dependency-root",
+                        str(dependency_root),
+                    ],
+                    timeout_seconds=2400,
+                )
+                validate_result = call_mcp_json(
+                    repo_root,
+                    "oci-data-flow-mcp",
+                    [
+                        "--environment",
+                        names.environment,
+                        "--command",
+                        "validate-archive",
+                        "--application-name",
+                        app["application_name"],
+                        "--dependency-root",
+                        str(dependency_root),
+                    ],
+                    timeout_seconds=2400,
+                )
+                archive_source_file = Path(str(package_result["archive_path"]))
+                archive_object_name = f"{names.project_prefix}/apps/{app['application_name']}/archive.zip"
+                upload_source_result = retry(
                     f"upload dataflow source {app['application_name']}",
                     lambda object_name=object_name: call_mcp_json(
                         repo_root,
@@ -2153,7 +3116,45 @@ def main() -> int:
                     attempts=8,
                     delay_seconds=15,
                 )
+                upload_archive_result = retry(
+                    f"upload dataflow archive {app['application_name']}",
+                    lambda archive_object_name=archive_object_name, archive_source_file=archive_source_file: call_mcp_json(
+                        repo_root,
+                        "oci-object-storage-mcp",
+                        [
+                            "--environment",
+                            names.environment,
+                            "--runtime",
+                            "oci",
+                            "--oci-mode",
+                            "apply",
+                            "--command",
+                            "upload-object",
+                            "--bucket-name",
+                            names.silver_bucket,
+                            "--namespace-name",
+                            names.namespace,
+                            "--source-file",
+                            str(archive_source_file),
+                            "--object-name",
+                            archive_object_name,
+                        ],
+                        timeout_seconds=1200,
+                    ),
+                    attempts=8,
+                    delay_seconds=15,
+                )
                 app["file_uri"] = f"oci://{names.silver_bucket}@{names.namespace}/{object_name}"
+                app["archive_uri"] = f"oci://{names.silver_bucket}@{names.namespace}/{archive_object_name}"
+                app["dependency_root"] = str(dependency_root)
+                results[app["application_name"]] = {
+                    "package": package_result,
+                    "validate": validate_result,
+                    "upload_source": upload_source_result,
+                    "upload_archive": upload_archive_result,
+                    "file_uri": app["file_uri"],
+                    "archive_uri": app["archive_uri"],
+                }
             return results
 
         record_step("upload_dataflow_sources", upload_dataflow_sources)
@@ -2170,32 +3171,44 @@ def main() -> int:
                 create_result = call_mcp_json(
                     repo_root,
                     "oci-data-flow-mcp",
-                    [
-                        "--environment",
-                        names.environment,
-                        "--runtime",
-                        "oci",
-                        "--oci-mode",
-                        "apply",
-                        "--command",
-                        "create-application",
-                        "--application-name",
-                        app["application_name"],
-                        "--source-dir",
-                        str(repo_root / "templates" / "data_flow" / "minimal_app"),
-                        "--compartment-id",
-                        ids["compartment_id"],
-                        "--file-uri",
-                        app["file_uri"],
-                        "--logs-bucket-uri",
-                        f"{names.silver_root_uri}logs/",
-                        "--wait-for-state",
-                        "ACTIVE",
-                        "--max-wait-seconds",
-                        "1800",
-                        "--wait-interval-seconds",
-                        "20",
-                    ],
+                    (
+                        [
+                            "--environment",
+                            names.environment,
+                            "--runtime",
+                            "oci",
+                            "--oci-mode",
+                            "apply",
+                            "--command",
+                            "create-application",
+                            "--application-name",
+                            app["application_name"],
+                            "--source-dir",
+                            str(repo_root / "templates" / "data_flow" / "minimal_app"),
+                            "--compartment-id",
+                            ids["compartment_id"],
+                            "--file-uri",
+                            app["file_uri"],
+                            "--archive-uri",
+                            app["archive_uri"],
+                            "--logs-bucket-uri",
+                            f"{names.silver_root_uri}logs/",
+                            "--wait-for-state",
+                            "ACTIVE",
+                            "--max-wait-seconds",
+                            "1800",
+                            "--wait-interval-seconds",
+                            "20",
+                        ]
+                        + (
+                        [
+                            "--private-endpoint-id",
+                            ids["data_flow_private_endpoint_id"],
+                        ]
+                        if ids.get("data_flow_private_endpoint_id")
+                        else []
+                        )
+                    ),
                     timeout_seconds=2400,
                 )
                 app["application_id"] = create_result["application_id"]
@@ -2286,32 +3299,40 @@ def main() -> int:
                 lambda: call_mcp_json(
                     repo_root,
                     "oci-data-integration-mcp",
-                    [
-                        "--environment",
-                        names.environment,
-                        "--runtime",
-                        "oci",
-                        "--oci-mode",
-                        "apply",
-                        "--command",
-                        "create-workspace",
-                        "--workspace-name",
-                        names.workspace_name,
-                        "--compartment-id",
-                        ids["compartment_id"],
-                        "--is-private-network",
-                        "true",
-                        "--subnet-id",
-                        ids["subnet_id"],
-                        "--vcn-id",
-                        ids["vcn_id"],
-                        "--wait-for-state",
-                        "SUCCEEDED",
-                        "--max-wait-seconds",
-                        "2400",
-                        "--wait-interval-seconds",
-                        "30",
-                    ],
+                    (
+                        [
+                            "--environment",
+                            names.environment,
+                            "--runtime",
+                            "oci",
+                            "--oci-mode",
+                            "apply",
+                            "--command",
+                            "create-workspace",
+                            "--workspace-name",
+                            names.workspace_name,
+                            "--compartment-id",
+                            ids["compartment_id"],
+                            "--is-private-network",
+                            str(network_settings.data_integration_workspace_private).lower(),
+                            "--wait-for-state",
+                            "SUCCEEDED",
+                            "--max-wait-seconds",
+                            "2400",
+                            "--wait-interval-seconds",
+                            "30",
+                        ]
+                        + (
+                        [
+                            "--subnet-id",
+                            ids["data_integration_subnet_id"],
+                            "--vcn-id",
+                            ids["vcn_id"],
+                        ]
+                        if network_settings.data_integration_workspace_private
+                        else []
+                        )
+                    ),
                     timeout_seconds=3000,
                 ),
                 attempts=10,
@@ -3330,7 +4351,9 @@ def main() -> int:
             {
                 "project_id": names.project_id,
                 "environment": names.environment,
+                "network_mode": names.network_mode,
                 "tag": names.tag,
+                "run_log_path": str(deployment_log_paths[0]),
                 "region": names.region,
                 "namespace": names.namespace,
                 "compartment_name": names.compartment_name,
@@ -3358,12 +4381,28 @@ def main() -> int:
                 "catalog_job_execution_id": ids.get("catalog_job_execution_id"),
                 "vcn_name": names.vcn_name,
                 "vcn_id": ids["vcn_id"],
+                "service_gateway_name": names.service_gateway_name,
                 "subnet_name": names.subnet_name,
                 "subnet_id": ids["subnet_id"],
+                "data_integration_subnet_name": names.subnet_name,
+                "data_integration_subnet_id": ids.get("data_integration_subnet_id"),
+                "data_flow_subnet_name": names.data_flow_subnet_name,
+                "data_flow_subnet_id": ids.get("data_flow_subnet_id"),
+                "autonomous_subnet_name": names.autonomous_subnet_name,
+                "autonomous_subnet_id": ids.get("autonomous_subnet_id"),
+                "internet_gateway_name": names.internet_gateway_name,
+                "internet_gateway_id": ids.get("internet_gateway_id"),
+                "nat_gateway_name": names.nat_gateway_name,
+                "nat_gateway_id": ids.get("nat_gateway_id"),
                 "nsg_name": names.nsg_name,
                 "nsg_id": ids["nsg_id"],
                 "route_table_name": names.route_table_name,
                 "route_table_id": ids["route_table_id"],
+                "data_flow_private_endpoint_name": names.data_flow_private_endpoint_name,
+                "data_flow_private_endpoint_id": ids.get("data_flow_private_endpoint_id"),
+                "adb_private_endpoint": ids.get("adb_private_endpoint"),
+                "adb_private_endpoint_label": names.adb_private_endpoint_label,
+                "adb_public_access_enabled": network_settings.autonomous_public_access_enabled,
                 "workflow_id": names.workflow_id,
                 "run_id": names.run_id,
                 "replay_run_id": names.replay_run_id,
@@ -3377,12 +4416,26 @@ def main() -> int:
         artifacts["vars_path"] = str(vars_path)
 
         flush_report("completed")
+        append_run_log(
+            deployment_log_paths,
+            "DEPLOYMENT_COMPLETED",
+            {
+                "status": "completed",
+                "total_steps": len(steps),
+                "report_path": str(report_path),
+                "vars_path": str(vars_path),
+                "quality_result_path": artifacts.get("quality_result_path"),
+                "gate_path": artifacts.get("gate_path"),
+            },
+        )
         print(
             json.dumps(
                 {
                     "status": "ok",
                     "report_path": str(report_path),
                     "vars_path": str(vars_path),
+                    "run_log_path": str(deployment_log_paths[0]),
+                    "network_mode": names.network_mode,
                     "project_manifest": manifest_path,
                     "compartment_id": ids["compartment_id"],
                     "autonomous_database_id": ids["autonomous_database_id"],
@@ -3400,6 +4453,16 @@ def main() -> int:
         return 0
     except Exception as exc:  # pragma: no cover - operational error path
         flush_report("failed", str(exc))
+        append_run_log(
+            deployment_log_paths,
+            "DEPLOYMENT_FAILED",
+            {
+                "status": "failed",
+                "total_steps": len(steps),
+                "report_path": str(report_path),
+                "error": str(exc),
+            },
+        )
         raise
 
 

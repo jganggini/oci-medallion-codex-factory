@@ -14,6 +14,7 @@ La idea no es solo ejecutar scripts. La idea es que Codex:
 - te pida la ruta exacta de `config`, `.pem` y wallet cuando el despliegue lo requiera
 - diferencie buckets existentes de capas realmente implementadas
 - asuma por defecto una ruta completa `landing_external -> bronze_raw -> silver_trusted -> gold_refined -> gold_adb`
+- aplique por defecto `network_mode public` en `dev`, `hybrid` en `qa` y `private` en `prod`
 - te lleve paso a paso por intake, bootstrap, publicacion, lineage, QA, validacion y reprocesos parciales
 
 ## Como pedirselo a Codex
@@ -32,7 +33,7 @@ Trabaja asi:
 1. inspecciona el repo y detecta la etapa actual
 2. hazme preguntas una por una
 3. si falta un archivo, dime exactamente en que ruta debe ir y que contenido minimo esperas
-4. pregunta explicitamente por SQL, scripts heredados, data o csv/parquet y documentacion de referencia
+4. pregunta explicitamente por SQL, scripts heredados, data o csv/parquet, jars o dependencias de Data Flow y documentacion de referencia
 5. pide tambien la ruta exacta del OCI config, de la llave .pem y del wallet si aplica
 6. si te digo que luego te pasare archivos, exigeme la ruta exacta donde estan hoy y la ruta destino dentro de workspace/migration-input/<project_id>/ o .local/oci/ o .local/autonomous/wallets/<env>/<adb_name>/
 7. despues del plan inicial, ejecuta el staging automatico para copiar los archivos a su ruta correcta antes del intake
@@ -44,7 +45,8 @@ Trabaja asi:
 13. antes de ejecutar cambios, resume el plan por etapas
 14. cuando cierres las preguntas, el plan inicial y el staging, levanta Docker con docker compose up -d dev-base oci-runner dataflow-local antes de intake, bootstrap o publish
 15. ejecuta siempre los scripts del repo, los MCPs y el OCI CLI usando Docker; no dependas de Python ni OCI CLI instalados en host
-16. guiame hasta dejar el proyecto listo para desplegar, migrar, validar y reprocesar por slice
+16. usa por defecto `network_mode public` en `dev`, `hybrid` en `qa` y `private` en `prod`; solo preguntame si quieres desviarte de eso
+17. guiame hasta dejar el proyecto listo para desplegar, migrar, validar y reprocesar por slice
 ```
 
 ## Modo recomendado
@@ -61,13 +63,14 @@ Cuando el flujo funciona bien, Codex deberia responder en este orden:
 1. confirmar que el repo local correcto esta abierto
 2. etapa actual
 3. confirmar que la ruta objetivo por defecto llega hasta `gold_adb`, salvo restriccion explicita
-4. pedir SQL, scripts, data y documentacion de referencia faltante
-5. pedir la ruta exacta de `config`, `.pem` y wallet cuando hagan falta
-6. si un insumo aun no fue copiado, pedir ruta fuente exacta y ruta destino exacta
-7. plan inicial por etapas
-8. ejecutar staging automatico antes del intake
-9. levantar Docker temprano antes de intake o bootstrap si todavia no esta arriba
-10. siguiente accion que hara cuando confirmes
+4. fijar por defecto `network_mode public` en `dev`, `hybrid` en `qa` y `private` en `prod`, salvo override explicito
+5. pedir SQL, scripts, data, jars o dependencias de Data Flow y documentacion de referencia faltante
+6. pedir la ruta exacta de `config`, `.pem` y wallet cuando hagan falta
+7. si un insumo aun no fue copiado, pedir ruta fuente exacta y ruta destino exacta
+8. plan inicial por etapas
+9. ejecutar staging automatico antes del intake
+10. levantar Docker temprano antes de intake o bootstrap si todavia no esta arriba
+11. siguiente accion que hara cuando confirmes
 
 ## Secuencia sugerida
 

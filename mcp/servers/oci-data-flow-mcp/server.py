@@ -12,8 +12,8 @@ REPO_ROOT_DEFAULT = CURRENT_FILE.parents[3]
 if str(REPO_ROOT_DEFAULT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT_DEFAULT))
 
-from mcp.common.dataflow_packager import LEGACY_IMAGE, package_dependency_archive, validate_dependency_archive
-from mcp.common.local_services import collect_data_flow_run_report, run_data_flow_application, write_data_flow_application
+from mcp.common.dataflow_packager import package_dependency_archive, validate_dependency_archive
+from mcp.common.local_services import create_data_flow_private_endpoint, collect_data_flow_run_report, run_data_flow_application, write_data_flow_application
 from mcp.common.medallion_runtime import (
     add_standard_runtime_args,
     build_openlineage_event,
@@ -146,6 +146,11 @@ def mirror_application(
         "display_name": args.display_name or args.application_name,
         "compartment_id": args.compartment_id,
         "application_id": args.application_id,
+        "private_endpoint_id": args.private_endpoint_id,
+        "private_endpoint_name": args.private_endpoint_name,
+        "subnet_id": args.subnet_id,
+        "dns_zones_json": args.dns_zones_json,
+        "nsg_ids": args.nsg_id,
         "application_type": args.application_type,
         "driver_shape": driver_shape,
         "driver_shape_config": driver_shape_config,
@@ -234,6 +239,8 @@ def build_application_command(
         command.extend(["--file-uri", args.file_uri])
     elif create_mode and from_json_file is None:
         raise SystemExit("--file-uri es requerido en runtime oci para create-application cuando no se usa --from-json-file")
+    if args.private_endpoint_id:
+        command.extend(["--private-endpoint-id", args.private_endpoint_id])
     if args.archive_uri:
         command.extend(["--archive-uri", args.archive_uri])
     if args.logs_bucket_uri:
@@ -254,9 +261,10 @@ def main() -> int:
     parser.add_argument(
         "--command",
         required=True,
-        choices=("package-dependencies", "validate-archive", "create-application", "update-application", "run-application", "collect-run-report"),
+        choices=("package-dependencies", "validate-archive", "create-private-endpoint", "create-application", "update-application", "run-application", "collect-run-report"),
     )
-    parser.add_argument("--application-name", required=True)
+    parser.add_argument("--application-name")
+    parser.add_argument("--private-endpoint-name")
     parser.add_argument("--source-dir")
     parser.add_argument("--dependency-root")
     parser.add_argument("--main-file", default="main.py")
@@ -266,7 +274,11 @@ def main() -> int:
     parser.add_argument("--archive-uri", dest="archive_uri")
     parser.add_argument("--file-uri")
     parser.add_argument("--compartment-id")
+    parser.add_argument("--subnet-id")
     parser.add_argument("--application-id")
+    parser.add_argument("--private-endpoint-id")
+    parser.add_argument("--dns-zones-json")
+    parser.add_argument("--nsg-id", action="append", default=[])
     parser.add_argument("--driver-shape")
     parser.add_argument("--executor-shape")
     parser.add_argument("--driver-shape-config-json")
@@ -284,7 +296,6 @@ def main() -> int:
     parser.add_argument("--python-version", default="3.11")
     parser.add_argument("--archive-name", default="archive.zip")
     parser.add_argument("--packager-image")
-    parser.add_argument("--use-legacy-packager-image", action="store_true")
     parser.add_argument("--parameter", action="append", default=[])
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--wait-for-state", action="append", default=[])
@@ -302,13 +313,15 @@ def main() -> int:
     context = MirrorContext(repo_root=Path(args.repo_root).resolve(), environment=args.environment)
     runtime_payload = runtime_payload_from_args(args)
     parameters = parse_parameters(args.parameter)
-    packager_image = LEGACY_IMAGE if args.use_legacy_packager_image else args.packager_image
+    packager_image = args.packager_image
     dependency_root = ensure_optional_directory(args.dependency_root, "directorio de dependencias")
     source_dir = ensure_optional_directory(args.source_dir, "directorio fuente")
     from_json_file = ensure_optional_file(args.from_json_file, "application json")
     archive_source_file = ensure_optional_file(args.archive_source_file, "archive fuente")
 
     if args.command == "package-dependencies":
+        if not args.application_name:
+            raise SystemExit("--application-name es requerido para package-dependencies")
         if dependency_root is None:
             raise SystemExit("--dependency-root es requerido para package-dependencies")
         result = package_dependency_archive(
@@ -331,6 +344,8 @@ def main() -> int:
         return 0
 
     if args.command == "validate-archive":
+        if not args.application_name:
+            raise SystemExit("--application-name es requerido para validate-archive")
         if dependency_root is None:
             raise SystemExit("--dependency-root es requerido para validate-archive")
         result = validate_dependency_archive(
@@ -351,7 +366,116 @@ def main() -> int:
         print(json.dumps({"status": "ok", "command": args.command, **result, "control_paths": control_paths}, indent=2, ensure_ascii=True))
         return 0
 
+    if args.command == "create-private-endpoint":
+        if not args.private_endpoint_name:
+            raise SystemExit("--private-endpoint-name es requerido para create-private-endpoint")
+        if args.runtime == "oci":
+            if not args.compartment_id or not args.subnet_id or not args.dns_zones_json:
+                raise SystemExit("--compartment-id, --subnet-id y --dns-zones-json son requeridos en runtime oci para create-private-endpoint")
+            ensure_service_compartment_id(args.compartment_id)
+            execution = OciExecutionContext(repo_root=context.repo_root, profile=args.oci_profile)
+            command = [
+                "data-flow",
+                "private-endpoint",
+                "create",
+                "--compartment-id",
+                args.compartment_id,
+                "--display-name",
+                args.private_endpoint_name,
+                "--subnet-id",
+                args.subnet_id,
+                "--dns-zones",
+                json.dumps(json.loads(args.dns_zones_json), ensure_ascii=True),
+            ]
+            if args.nsg_id:
+                command.extend(["--nsg-ids", json.dumps(args.nsg_id, ensure_ascii=True)])
+            add_wait_options(command, args.wait_for_state, args.max_wait_seconds, args.wait_interval_seconds)
+            result = execute_oci(execution, "data_flow", context, "create-private-endpoint", command, args.oci_mode)
+            oci_data = parse_oci_result_data(result)
+            manifest = create_data_flow_private_endpoint(
+                context,
+                args.private_endpoint_name,
+                {
+                    "runtime": "oci",
+                    "oci_mode": args.oci_mode,
+                    "compartment_id": args.compartment_id,
+                    "subnet_id": args.subnet_id,
+                    "nsg_ids": args.nsg_id,
+                    "dns_zones": json.loads(args.dns_zones_json),
+                    "private_endpoint_id": oci_data.get("id"),
+                    "lifecycle_state": oci_data.get("lifecycle-state"),
+                    "plan_path": result.get("plan_path"),
+                    "result_path": result.get("result_path"),
+                },
+            )
+            control_paths = record_control_runtime(
+                context,
+                runtime_payload,
+                "data_flow",
+                "create_private_endpoint",
+                "applied" if args.oci_mode == "apply" else "planned",
+                extra={
+                    "private_endpoint_name": args.private_endpoint_name,
+                    "private_endpoint_id": oci_data.get("id"),
+                    "private_endpoint_manifest": str(manifest),
+                    "plan_path": result.get("plan_path"),
+                    "result_path": result.get("result_path"),
+                },
+            )
+            print(
+                json.dumps(
+                    {
+                        "status": "ok",
+                        "runtime": "oci",
+                        "command": args.command,
+                        "private_endpoint_manifest": str(manifest),
+                        "private_endpoint_id": oci_data.get("id"),
+                        "lifecycle_state": oci_data.get("lifecycle-state"),
+                        "plan_path": result.get("plan_path"),
+                        "result_path": result.get("result_path"),
+                        "control_paths": control_paths,
+                    },
+                    indent=2,
+                    ensure_ascii=True,
+                )
+            )
+            return 0
+
+        manifest = create_data_flow_private_endpoint(
+            context,
+            args.private_endpoint_name,
+            {
+                "runtime": "local",
+                "subnet_id": args.subnet_id,
+                "nsg_ids": args.nsg_id,
+                "dns_zones": json.loads(args.dns_zones_json) if args.dns_zones_json else [],
+            },
+        )
+        control_paths = record_control_runtime(
+            context,
+            runtime_payload,
+            "data_flow",
+            "create_private_endpoint",
+            "mirrored",
+            extra={"private_endpoint_name": args.private_endpoint_name, "private_endpoint_manifest": str(manifest)},
+        )
+        print(
+            json.dumps(
+                {
+                    "status": "ok",
+                    "command": args.command,
+                    "private_endpoint_manifest": str(manifest),
+                    "control_paths": control_paths,
+                },
+                indent=2,
+                ensure_ascii=True,
+            )
+        )
+        return 0
+
     if args.command in ("create-application", "update-application"):
+        if not args.application_name:
+            raise SystemExit("--application-name es requerido para create-application y update-application")
         if source_dir is None and from_json_file is None and archive_source_file is None and args.runtime == "local":
             raise SystemExit("Debes informar --source-dir, --from-json-file o --archive-source-file en modo local")
 
@@ -373,6 +497,7 @@ def main() -> int:
                 extra={
                     "application_name": args.application_name,
                     "application_id": oci_data.get("id"),
+                    "private_endpoint_id": args.private_endpoint_id,
                     "manifest_path": str(mirrored["manifest_path"]) if mirrored["manifest_path"] else None,
                     "archive_path": str(mirrored["archive_path"]) if mirrored["archive_path"] else None,
                     "plan_path": result.get("plan_path"),
@@ -386,6 +511,7 @@ def main() -> int:
                         "runtime": "oci",
                         "command": args.command,
                         "application_id": oci_data.get("id"),
+                        "private_endpoint_id": args.private_endpoint_id,
                         "lifecycle_state": oci_data.get("lifecycle-state"),
                         "manifest_path": str(mirrored["manifest_path"]) if mirrored["manifest_path"] else None,
                         "archive_path": str(mirrored["archive_path"]) if mirrored["archive_path"] else None,
@@ -411,6 +537,7 @@ def main() -> int:
             "mirrored",
             extra={
                 "application_name": args.application_name,
+                "private_endpoint_id": args.private_endpoint_id,
                 "manifest_path": str(mirrored["manifest_path"]) if mirrored["manifest_path"] else None,
                 "archive_path": str(mirrored["archive_path"]) if mirrored["archive_path"] else None,
             },
@@ -421,6 +548,7 @@ def main() -> int:
                     "status": "ok",
                     "command": args.command,
                     "manifest_path": str(mirrored["manifest_path"]) if mirrored["manifest_path"] else None,
+                    "private_endpoint_id": args.private_endpoint_id,
                     "archive_path": str(mirrored["archive_path"]) if mirrored["archive_path"] else None,
                     "application_json_path": str(mirrored["application_json_path"]) if mirrored["application_json_path"] else None,
                     "dependency_archive_path": dependency_result["archive_path"] if dependency_result else None,
@@ -434,6 +562,8 @@ def main() -> int:
         return 0
 
     if args.command == "collect-run-report":
+        if not args.application_name:
+            raise SystemExit("--application-name es requerido para collect-run-report")
         metrics = {
             "rows_in": args.rows_in,
             "rows_out": args.rows_out,
@@ -496,6 +626,8 @@ def main() -> int:
         return 0
 
     if args.runtime == "oci":
+        if not args.application_name:
+            raise SystemExit("--application-name es requerido para run-application")
         execution = OciExecutionContext(repo_root=context.repo_root, profile=args.oci_profile)
         if not args.application_id or not args.compartment_id:
             raise SystemExit("--application-id y --compartment-id son requeridos en runtime oci para run-application")
@@ -567,6 +699,9 @@ def main() -> int:
             )
         )
         return 0
+
+    if not args.application_name:
+        raise SystemExit("--application-name es requerido para run-application")
 
     run_report = run_data_flow_application(
         context,
